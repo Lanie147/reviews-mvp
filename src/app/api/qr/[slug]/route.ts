@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import QRCode from "qrcode";

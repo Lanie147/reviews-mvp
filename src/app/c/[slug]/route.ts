@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 import { db } from "@/lib/db";
 import { buildReviewUrl } from "@/lib/reviewLink";
 import { NextRequest, NextResponse } from "next/server";
