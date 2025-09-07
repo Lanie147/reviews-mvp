@@ -1,28 +1,20 @@
+// src/app/api/dev/check/route.ts
 export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
 export async function GET() {
   try {
-    const campaigns = await db.campaign.count();
-    const targets = await db.reviewTarget.count();
-    const links = await db.shortLink.count();
-    const marketplaces = await db.marketplace.count();
-
-    return NextResponse.json({
-      ok: true,
-      counts: { campaigns, targets, links, marketplaces },
-      dbUrlPresent: !!process.env.DATABASE_URL,
-      nodeEnv: process.env.NODE_ENV,
-    });
-  } catch (e: any) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: e?.message ?? String(e),
-        dbUrlPresent: !!process.env.DATABASE_URL,
-      },
-      { status: 500 }
-    );
+    const counts = {
+      marketplaces: await db.marketplace.count(),
+      campaigns: await db.campaign.count(),
+      targets: await db.reviewTarget.count(),
+      links: await db.shortLink.count(),
+    };
+    return NextResponse.json({ ok: true, counts });
+  } catch (e: unknown) {
+    // <— was: any
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }

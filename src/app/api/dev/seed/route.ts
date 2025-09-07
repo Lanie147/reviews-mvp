@@ -1,16 +1,16 @@
+// src/app/api/dev/seed/route.ts
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { Platform } from "@prisma/client";
 
-export async function GET(req: Request) {
-  // simple guard
+export async function GET() {
+  // <— no arg
   const ok =
     process.env.NODE_ENV !== "production" || process.env.SEED_TOKEN === "allow";
   if (!ok) return new NextResponse("forbidden", { status: 403 });
 
-  // idempotent seed (safe to run multiple times)
   const mkt = await db.marketplace.upsert({
     where: { id: "seed-amazon-uk" },
     update: {},
@@ -40,7 +40,7 @@ export async function GET(req: Request) {
       id: "seed-target",
       campaign: { connect: { id: campaign.id } },
       platform: Platform.AMAZON,
-      asin: "B0TESTASIN", // put a real ASIN
+      asin: "B0TESTASIN",
       isPrimary: true,
     },
   });
