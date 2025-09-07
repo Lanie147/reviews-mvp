@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  AMAZON
+  EBAY
+  GOOGLE
+  SHOPIFY
+  CUSTOM
+}
+
+model Marketplace {
+  id         String     @id @default(cuid())
+  platform   Platform
+  code       String // "UK","US","DE"...
+  tld        String? // "co.uk","com","de" (Amazon/eBay)
+  externalId String? // sellerId / placeId / shop domain etc
+  createdAt  DateTime   @default(now())
+  campaigns  Campaign[]
+}
+
+model Campaign {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  status        String         @default("active")
+  marketplaceId String
+  marketplace   Marketplace    @relation(fields: [marketplaceId], references: [id])
+  targets       ReviewTarget[]
+  shortLinks    ShortLink[]
+  createdAt     DateTime       @default(now())
+}
+
+model ReviewTarget {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  platform   Platform
+  asin       String? // Amazon
+  itemId     String? // eBay
+  placeId    String? // Google
+  url        String? // Shopify/custom fallback
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model ShortLink {
+  id         String      @id @default(cuid())
+  campaignId String
+  campaign   Campaign    @relation(fields: [campaignId], references: [id])
+  slug       String      @unique
+  createdAt  DateTime    @default(now())
+  scans      ScanEvent[]
+}
+
+model ScanEvent {
+  id          String    @id @default(cuid())
+  shortLinkId String
+  shortLink   ShortLink @relation(fields: [shortLinkId], references: [id])
+  userAgent   String?
+  ipHash      String?
+  createdAt   DateTime  @default(now())
+}
