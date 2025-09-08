@@ -15,6 +15,25 @@ enum Platform {
   CUSTOM
 }
 
+model FeedbackSubmission {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation("CampaignSubmissions", fields: [campaignId], references: [id], onDelete: Cascade)
+
+  product     String?
+  marketplace String? // e.g. "UK", "US" or a label
+  orderNumber String?
+  rating      Int? // 1..5
+  used7Days   Boolean?
+  name        String?
+  email       String?
+  phone       String?
+  optIn       Boolean? // marketing opt-in
+
+  reviewText String?
+  createdAt  DateTime @default(now())
+}
+
 model Marketplace {
   id         String     @id @default(cuid())
   platform   Platform
@@ -26,15 +45,16 @@ model Marketplace {
 }
 
 model Campaign {
-  id            String         @id @default(cuid())
+  id            String               @id @default(cuid())
   name          String
-  slug          String         @unique
-  status        String         @default("active")
+  slug          String               @unique
+  status        String               @default("active")
   marketplaceId String
-  marketplace   Marketplace    @relation(fields: [marketplaceId], references: [id])
+  marketplace   Marketplace          @relation(fields: [marketplaceId], references: [id])
   targets       ReviewTarget[]
   shortLinks    ShortLink[]
-  createdAt     DateTime       @default(now())
+  submissions   FeedbackSubmission[] @relation("CampaignSubmissions")
+  createdAt     DateTime             @default(now())
 }
 
 model ReviewTarget {

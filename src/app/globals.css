@@ -1,26 +1,56 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
+/* --- shadcn theme tokens (v4 minimal) --- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+
+  --border: 214 32% 91%;
+  --ring: 215 20% 65%;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  --background: 224 71% 4%;
+  --foreground: 213 31% 91%;
+
+  --card: 224 71% 4%;
+  --card-foreground: 213 31% 91%;
+
+  --muted: 223 47% 11%;
+  --muted-foreground: 215 20% 65%;
+
+  --border: 223 47% 11%;
+  --ring: 215 20% 65%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* helpful bridges for shadcn classes */
+.bg-background {
+  background-color: hsl(var(--background));
+}
+.text-foreground {
+  color: hsl(var(--foreground));
+}
+.border-border {
+  border-color: hsl(var(--border));
+}
+.bg-card {
+  background-color: hsl(var(--card));
+}
+.text-muted-foreground {
+  color: hsl(var(--muted-foreground));
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* optional: improve native color-scheme for form controls */
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
 }
