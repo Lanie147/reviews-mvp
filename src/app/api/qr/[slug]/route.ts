@@ -1,25 +1,26 @@
-export const runtime = "nodejs";
-import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import QRCode from "qrcode";
+import { db } from "@/lib/db";
+
+export const runtime = "nodejs";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await ctx.params;
 
-  const short = await db.shortLink.findUnique({ where: { slug } });
-  if (!short) return new NextResponse("Not found", { status: 404 });
+  // robust origin
+  const origin =
+    process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ||
+    new URL(req.url).origin;
 
-  const base = process.env.NEXT_PUBLIC_BASE_URL!;
-  const target = `${base}/c/${slug}`;
+  const target = `${origin}/c/${slug}`;
 
   const svg = await QRCode.toString(target, {
     type: "svg",
     errorCorrectionLevel: "M",
   });
-
   return new NextResponse(svg, {
     headers: {
       "Content-Type": "image/svg+xml",

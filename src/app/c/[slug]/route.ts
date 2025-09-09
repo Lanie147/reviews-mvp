@@ -42,10 +42,10 @@ export async function GET(
     });
     if (dest) return NextResponse.redirect(dest, 302);
   }
+  const origin =
+    process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ||
+    new URL(req.url).origin;
 
-  const landing = new URL(
-    `/r/${short.campaign.slug}`,
-    process.env.NEXT_PUBLIC_BASE_URL || req.url
-  );
+  const landing = new URL(`/r/${short.campaign.slug}`, origin);
   return NextResponse.redirect(landing, 302);
 }
