@@ -1,49 +1,88 @@
+// src/components/review-wizard/ReviewWizard.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input"; // run: npx shadcn add input
-import { Textarea } from "@/components/ui/textarea"; // run: npx shadcn add textarea
-import { Label } from "@/components/ui/label"; // run: npx shadcn add label
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // npx shadcn add radio-group
-import { Checkbox } from "@/components/ui/checkbox"; // npx shadcn add checkbox
-import { Progress } from "@/components/ui/progress"; // npx shadcn add progress
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { CheckCircle2 } from "lucide-react";
 
-type Props = {
-  campaign: {
-    id: string;
-    name: string;
-    amazonUrl: string; // where we send them to post review
-    marketplaceLabel: string;
-  };
+type CampaignProps = {
+  id: string;
+  name: string;
+  // ✅ allow marketplace to be missing/null
+  marketplace?: { platform: string; code: string; tld: string } | null;
+  target?: {
+    platform: string;
+    asin?: string;
+    itemId?: string;
+    placeId?: string;
+    url?: string;
+  } | null;
 };
 
-export default function ReviewWizard({ campaign }: Props) {
+export default function ReviewWizard({
+  campaign,
+}: {
+  campaign: CampaignProps;
+}) {
   const [step, setStep] = useState(1);
 
-  // form state
+  // step 1
   const [product, setProduct] = useState("");
-  const [marketplace, setMarketplace] = useState(campaign.marketplaceLabel);
+
+  // ✅ derive a safe initial marketplace label
+  const initialMarketplace = useMemo(() => {
+    const m = campaign?.marketplace;
+    return m?.platform && m?.code ? `${m.platform} ${m.code}` : "";
+  }, [campaign]);
+
+  const [marketplace, setMarketplace] = useState(initialMarketplace);
+
+  // ✅ keep state in sync if campaign is loaded later/changes
+  useEffect(() => {
+    setMarketplace(initialMarketplace);
+  }, [initialMarketplace]);
+
   const [orderNumber, setOrderNumber] = useState("");
   const [rating, setRating] = useState<number | undefined>(5);
   const [used7Days, setUsed7Days] = useState<boolean | undefined>(true);
 
+  // step 2
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [optIn, setOptIn] = useState(true);
 
+  // step 3
   const [review, setReview] = useState("");
   const minChars = 40;
   const reviewOk = review.trim().length >= minChars;
 
-  const pct = useMemo(() => [1, 2, 3, 4].indexOf(step) * 25 + 25, [step]);
+  const pct = useMemo(() => (step - 1) * 25 + 25, [step]);
 
-  async function savePartial(nextStep: number) {
-    // you can persist partials here if wanted
-    setStep(nextStep);
+  function buildReviewUrl(): string | null {
+    const t = campaign?.target;
+    if (!t) return null;
+
+    // Amazon only for MVP
+    if (t.platform === "AMAZON" && t.asin) {
+      // ✅ guard tld
+      const tld = campaign?.marketplace?.tld ?? "co.uk";
+      return `https://www.amazon.${tld}/review/create-review?asin=${t.asin}`;
+    }
+    // Fallback: custom URL if provided
+    if (t.url) return t.url;
+    return null;
+  }
+
+  async function savePartial(next: number) {
+    setStep(next);
   }
 
   async function finish() {
@@ -64,30 +103,25 @@ export default function ReviewWizard({ campaign }: Props) {
         optIn,
         reviewText: review,
       }),
-    });
+    }).catch(() => {});
 
-    // copy review text to clipboard (so they can paste on Amazon)
-    if (review) {
-      try {
-        await navigator.clipboard.writeText(review);
-      } catch {}
-    }
+    // Copy review text to clipboard
+    try {
+      if (review) await navigator.clipboard.writeText(review);
+    } catch {}
 
-    // open Amazon review page in a new tab
-    if (campaign.amazonUrl) {
-      window.open(campaign.amazonUrl, "_blank", "noopener,noreferrer");
-    }
+    // Open marketplace review page
+    const dest = buildReviewUrl();
+    if (dest) window.open(dest, "_blank", "noopener,noreferrer");
 
     setStep(4);
   }
 
   return (
-    <Card className="mx-auto w-full">
-      <CardHeader>
+    <Card className="w-full">
+      <CardHeader className="space-y-2">
         <CardTitle className="text-center">{campaign.name}</CardTitle>
-        <div className="mt-2">
-          <Progress value={pct} />
-        </div>
+        <Progress value={pct} />
       </CardHeader>
 
       <CardContent className="space-y-6">
@@ -102,7 +136,7 @@ export default function ReviewWizard({ campaign }: Props) {
               <div>
                 <Label>Which product did you purchase?</Label>
                 <Input
-                  placeholder="e.g. Full Face Snorkel Mask"
+                  placeholder="Full Face Snorkel Mask"
                   value={product}
                   onChange={(e) => setProduct(e.target.value)}
                 />
@@ -111,7 +145,7 @@ export default function ReviewWizard({ campaign }: Props) {
               <div>
                 <Label>Which marketplace did you purchase from?</Label>
                 <Input
-                  placeholder="e.g. United Kingdom"
+                  placeholder="United Kingdom"
                   value={marketplace}
                   onChange={(e) => setMarketplace(e.target.value)}
                 />
@@ -236,7 +270,7 @@ export default function ReviewWizard({ campaign }: Props) {
                 value={review}
                 onChange={(e) => setReview(e.target.value)}
                 rows={6}
-                placeholder="How do you like our product? Minimum 40 characters…"
+                placeholder="Minimum 40 characters…"
               />
               <div className="text-xs text-muted-foreground">
                 {Math.min(review.trim().length, minChars)}/{minChars} characters
@@ -266,7 +300,7 @@ export default function ReviewWizard({ campaign }: Props) {
           </>
         )}
 
-        {/* STEP 4 — Thank you */}
+        {/* STEP 4 */}
         {step === 4 && (
           <div className="space-y-4 text-center">
             <CheckCircle2 className="mx-auto h-10 w-10 text-green-600" />
@@ -284,7 +318,7 @@ export default function ReviewWizard({ campaign }: Props) {
                 SAVEBIG5
               </div>
               <div className="mt-2 text-xs text-muted-foreground">
-                * Example only — replace with your real promo logic.
+                * Example only — replace with your promo logic.
               </div>
             </div>
 

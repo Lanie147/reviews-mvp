@@ -1,6 +1,6 @@
+// src/app/c/[slug]/route.ts
 export const runtime = "nodejs";
 import { db } from "@/lib/db";
-import { buildReviewUrl } from "@/lib/reviewLink";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 
@@ -12,7 +12,7 @@ export async function GET(
 
   const short = await db.shortLink.findUnique({
     where: { slug },
-    include: { campaign: { include: { targets: true, marketplace: true } } },
+    include: { campaign: true },
   });
   if (!short) return NextResponse.redirect(new URL("/", req.url), 302);
 
@@ -22,30 +22,16 @@ export async function GET(
     req.headers.get("x-real-ip") ||
     "0.0.0.0";
   const ipHash = crypto.createHash("sha256").update(String(ip)).digest("hex");
-
   await db.scanEvent.create({
     data: { shortLinkId: short.id, userAgent: ua, ipHash },
   });
 
-  const tld = short.campaign.marketplace?.tld ?? "co.uk";
-  const targets = short.campaign.targets;
-
-  if (targets.length === 1) {
-    const t = targets[0];
-    const dest = buildReviewUrl({
-      platform: t.platform,
-      asin: t.asin ?? undefined,
-      itemId: t.itemId ?? undefined,
-      placeId: t.placeId ?? undefined,
-      url: t.url ?? undefined,
-      tld,
-    });
-    if (dest) return NextResponse.redirect(dest, 302);
-  }
   const origin =
     process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ||
     new URL(req.url).origin;
 
-  const landing = new URL(`/r/${short.campaign.slug}`, origin);
-  return NextResponse.redirect(landing, 302);
+  return NextResponse.redirect(
+    new URL(`/r/${short.campaign.slug}`, origin),
+    302
+  );
 }
