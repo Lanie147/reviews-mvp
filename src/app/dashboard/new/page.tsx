@@ -91,6 +91,7 @@ export default async function NewCampaignPage() {
         platform: "AMAZON",
         asin,
         isPrimary: true,
+        title: name, // Using the campaign name as the review target title
       },
     });
 

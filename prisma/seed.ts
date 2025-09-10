@@ -25,10 +25,16 @@ async function main() {
   // Review target for this campaign
   await db.reviewTarget.create({
     data: {
-      campaign: { connect: { id: campaign.id } },
-      platform: Platform.AMAZON,
+      campaign: {
+        connect: {
+          id: campaign.id, // Use the campaign.id instead of hardcoded ID
+        },
+      },
+      platform: "AMAZON",
       asin: "B0XXXXXXX",
       isPrimary: true,
+      title: "Amazon Product B0XXXXXXX",
+      image: `https://images-na.ssl-images-amazon.com/images/P/B0XXXXXXX.jpg`,
     },
   });
 

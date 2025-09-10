@@ -10,8 +10,9 @@ export default async function Landing({
 }: {
   params: { slug: string };
 }) {
+  const slug = (await params).slug;
   const campaign = await db.campaign.findUnique({
-    where: { slug: params.slug },
+    where: { slug },
     include: { marketplace: true, targets: true },
   });
 
@@ -30,23 +31,17 @@ export default async function Landing({
     <main className="mx-auto max-w-xl p-4 sm:p-6">
       <ReviewWizard
         campaign={{
-          id: campaign.id,
-          name: campaign.name,
+          ...campaign,
           marketplace: {
-            platform: campaign.marketplace?.platform ?? "AMAZON",
-            code: campaign.marketplace?.code ?? "UK",
-            tld: campaign.marketplace?.tld ?? "co.uk",
+            ...campaign.marketplace,
+            tld: campaign.marketplace.tld ?? "com",
           },
-          target: t
-            ? {
-                platform: t.platform,
-                asin: t.asin ?? undefined,
-                itemId: t.itemId ?? undefined,
-                placeId: t.placeId ?? undefined,
-                url: t.url ?? undefined,
-              }
-            : undefined,
         }}
+        products={campaign.targets.map((target) => ({
+          asin: target.asin!,
+          image: `https://images-na.ssl-images-amazon.com/images/P/${target.asin}.jpg`,
+          title: target.asin || "Product",
+        }))}
       />
     </main>
   );

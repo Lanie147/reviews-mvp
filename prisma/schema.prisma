@@ -16,6 +16,26 @@ enum Platform {
   CUSTOM
 }
 
+model ReviewSubmission {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  campaignId     String
+  campaignName   String
+  marketplace    Json
+  rating         Int
+  used7Days      Boolean
+  reviewText     String
+  orderNumber    String
+  email          String?  @db.VarChar(320)
+  marketingOptIn Boolean  @default(false)
+  productName    String
+  selectedTarget ReviewTarget? @relation("SubmissionTarget", fields: [targetId], references: [id])
+  targetId       String?
+  target         Json?
+
+  @@unique([campaignId, orderNumber], name: "campaignId_orderNumber")
+}
+
 model FeedbackSubmission {
   id         String   @id @default(cuid())
   campaignId String
@@ -59,16 +79,19 @@ model Campaign {
 }
 
 model ReviewTarget {
-  id         String   @id @default(cuid())
-  campaignId String
-  campaign   Campaign @relation(fields: [campaignId], references: [id])
-  platform   Platform
-  asin       String? // Amazon
-  itemId     String? // eBay
-  placeId    String? // Google
-  url        String? // Shopify/custom fallback
-  isPrimary  Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id           String             @id @default(cuid())
+  campaignId   String
+  campaign     Campaign          @relation(fields: [campaignId], references: [id])
+  platform     Platform
+  asin         String?           // Amazon
+  itemId       String?           // eBay
+  placeId      String?           // Google
+  url          String?           // Shopify/custom fallback
+  isPrimary    Boolean           @default(false)
+  title        String            // Product title
+  image        String?           // Product image URL
+  createdAt    DateTime          @default(now())
+  submissions  ReviewSubmission[] @relation("SubmissionTarget")
 }
 
 model ShortLink {
