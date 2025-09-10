@@ -1,8 +1,7 @@
-// src/components/review-wizard/ReviewWizard.tsx
 "use client";
 
 import { useMemo, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, type Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   reviewSubmissionSchema,
@@ -23,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import Image from "next/image"; // ✅ use Next Image
 
 type CampaignProps = {
   id: string;
@@ -115,9 +115,12 @@ export default function ReviewWizard({
       }
     }
 
-    const ok = await trigger(fields);
+    // ✅ remove `any` by using RHF Path<T>
+    const ok = await trigger(fields as Path<ReviewSubmission>[], {
+      shouldFocus: true,
+    });
     if (!ok) return;
-    setStep((s) => Math.min(s + 1, LAST_STEP)); // go to Summary on last increment
+    setStep((s) => Math.min(s + 1, LAST_STEP)); // go to Summary
   };
 
   const back = () => setStep((s) => Math.max(s - 1, 0));
@@ -133,7 +136,8 @@ export default function ReviewWizard({
     if (!res.ok) {
       if (data?.errors) {
         data.errors.forEach((e: { path: string; message: string }) => {
-          setError(e.path as any, { message: e.message });
+          // ✅ remove `any` by casting to Path<ReviewSubmission>
+          setError(e.path as Path<ReviewSubmission>, { message: e.message });
         });
       }
       const firstErrorPath = data?.errors?.[0]?.path as
@@ -153,7 +157,7 @@ export default function ReviewWizard({
     setStep(STEPS.length); // success screen
   };
 
-  // Submit only from the final button; prevent implicit form submits on earlier steps
+  // Prevent implicit submit before final step
   const preventImplicitSubmit: React.FormEventHandler<HTMLFormElement> = (
     e
   ) => {
@@ -177,7 +181,7 @@ export default function ReviewWizard({
     );
   }
 
-  // Early Review Warning screen (sentinel)
+  // Early Review Warning screen
   if (step === STEPS.length) {
     return (
       <Card className="max-w-2xl mx-auto">
@@ -185,7 +189,17 @@ export default function ReviewWizard({
           <CardTitle>Please wait before reviewing</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <EarlyReviewWarning />
+          {/* if this is a separate component, it was fixed above */}
+          {/* or keep inline text without apostrophes */}
+          <div className="p-4 rounded-md bg-yellow-50 text-yellow-800">
+            <h3 className="font-medium mb-2">Why do I need to wait?</h3>
+            <p className="text-sm">
+              Amazon&apos;s systems may flag reviews left too soon after
+              purchase. Please wait at least 7 days after receiving your product
+              before leaving a review. This helps ensure your review appears
+              genuine and stays published.
+            </p>
+          </div>
           <Button onClick={() => setStep(1)} variant="ghost">
             Go back
           </Button>
@@ -225,7 +239,6 @@ export default function ReviewWizard({
           onSubmit={preventImplicitSubmit}
           className="space-y-6"
           onKeyDown={(e) => {
-            // Enter should not submit before final step
             if (e.key === "Enter" && !isFinalStep) {
               e.preventDefault();
               if ((e.target as HTMLElement)?.tagName !== "TEXTAREA") next();
@@ -262,9 +275,11 @@ export default function ReviewWizard({
                     {products.map((product) => (
                       <SelectItem key={product.asin} value={product.asin}>
                         <div className="flex items-center gap-2">
-                          <img
+                          <Image
                             src={product.image}
                             alt={product.title}
+                            width={40}
+                            height={40}
                             className="w-10 h-10 object-contain"
                           />
                           <span className="text-sm">{product.title}</span>
@@ -313,7 +328,7 @@ export default function ReviewWizard({
                       onCheckedChange={(val) => field.onChange(Boolean(val))}
                     />
                     <Label htmlFor="used7Days">
-                      I've used the product for at least 7 days
+                      I&apos;ve used the product for at least 7 days
                     </Label>
                   </div>
                 )}
@@ -390,7 +405,7 @@ export default function ReviewWizard({
                   )}
                 />
                 <Label htmlFor="marketingOptIn">
-                  I'd like to receive updates about future campaigns
+                  I&apos;d like to receive updates about future campaigns
                 </Label>
               </div>
             </div>
@@ -428,8 +443,8 @@ export default function ReviewWizard({
                 />
               </div>
               <p className="text-sm text-muted-foreground">
-                Please review your submission. Click “Confirm & Submit” when
-                you're ready.
+                Please review your submission. Click &ldquo;Confirm &amp;
+                Submit&rdquo; when you&apos;re ready.
               </p>
             </div>
           )}
@@ -450,7 +465,6 @@ export default function ReviewWizard({
                 Next
               </Button>
             ) : (
-              // Submit ONLY from this button
               <Button
                 type="button"
                 onClick={handleSubmit(onSubmit)}
@@ -473,19 +487,6 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <div className="text-sm text-muted-foreground text-right">
         {value || "—"}
       </div>
-    </div>
-  );
-}
-
-function EarlyReviewWarning() {
-  return (
-    <div className="p-4 rounded-md bg-yellow-50 text-yellow-800">
-      <h3 className="font-medium mb-2">Why do I need to wait?</h3>
-      <p className="text-sm">
-        Amazon may flag reviews left too soon after purchase. Please wait at
-        least 7 days after receiving your product before leaving a review. This
-        helps ensure your review appears genuine and stays published.
-      </p>
     </div>
   );
 }
