@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, Controller, type Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, ExternalLink, Star } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -23,6 +23,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Image from "next/image"; // ✅ use Next Image
+import React from "react";
+
+// --- Types ---
 
 type CampaignProps = {
   id: string;
@@ -50,6 +53,95 @@ const STEPS = [
   "Contact & Consent",
   "Confirm & Submit",
 ] as const;
+function StarRating({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const [hover, setHover] = React.useState<number | null>(null);
+  const display = hover ?? value ?? 0;
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Rating"
+      className="flex items-center gap-2"
+    >
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          role="radio"
+          aria-checked={value === n}
+          aria-label={`${n} star${n > 1 ? "s" : ""}`}
+          onMouseEnter={() => setHover(n)}
+          onMouseLeave={() => setHover(null)}
+          onFocus={() => setHover(n)}
+          onBlur={() => setHover(null)}
+          onClick={() => onChange(n)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+              e.preventDefault();
+              onChange(Math.min((value || 0) + 1, 5));
+            } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+              e.preventDefault();
+              onChange(Math.max((value || 0) - 1, 1));
+            }
+          }}
+          className="p-1"
+        >
+          <Star
+            className={`h-7 w-7 ${
+              display >= n ? "text-yellow-500" : "text-muted-foreground/60"
+            }`}
+            // Fill the star when active; lucide icons accept standard SVG props
+            fill={display >= n ? "currentColor" : "none"}
+          />
+        </button>
+      ))}
+      <span className="ml-1 text-sm text-muted-foreground min-w-[56px]">
+        {value ? `${value} / 5` : "Select a rating"}
+      </span>
+    </div>
+  );
+}
+
+// --- Popup‑safe helper ---
+function openCopyThenGate(opts: {
+  url: string | null;
+  text: string;
+  onOpened: () => void; // setHasOpenedExternal(true)
+}) {
+  const { url, text, onOpened } = opts;
+
+  // 1) Open synchronously to preserve the user gesture
+  let opened = false;
+  if (url) {
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (win) {
+      opened = true;
+      try {
+        win.opener = null;
+      } catch {}
+      try {
+        win.focus();
+      } catch {}
+    }
+  }
+
+  // 2) Fire-and-forget copy (no await before window.open)
+  const trimmed = (text || "").trim();
+  if (trimmed && navigator?.clipboard?.writeText) {
+    navigator.clipboard.writeText(trimmed).catch(() => {});
+  }
+
+  // 3) Gate
+  if (opened) {
+    onOpened();
+  }
+}
 
 export default function ReviewWizard({
   campaign,
@@ -60,6 +152,7 @@ export default function ReviewWizard({
 }) {
   const [step, setStep] = useState(0);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [hasOpenedExternal, setHasOpenedExternal] = useState(false);
 
   const form = useForm<ReviewSubmission>({
     resolver: zodResolver(reviewSubmissionSchema),
@@ -88,12 +181,33 @@ export default function ReviewWizard({
     trigger,
     getValues,
     control,
+    watch,
     formState: { errors, isSubmitting },
   } = form;
 
   const LAST_STEP = STEPS.length - 1;
   const isFinalStep = step === LAST_STEP;
   const progress = useMemo(() => ((step + 1) / STEPS.length) * 100, [step]);
+
+  // --- Watchers for gating logic ---
+  const rating = watch("rating");
+  const reviewText = watch("reviewText");
+  const target = watch("target");
+
+  // If rating changes (eg 5 -> 3), reset the external gate
+  useEffect(() => {
+    setHasOpenedExternal(false);
+  }, [rating]);
+
+  const needsExternalReview = useMemo(
+    () => (Number(rating) || 0) >= 4,
+    [rating]
+  );
+  const reviewUrl = useMemo(
+    () => buildReviewUrl(campaign, target),
+    [campaign, target]
+  );
+  const canProceedFromStep2 = !needsExternalReview || hasOpenedExternal;
 
   const fieldsByStep: Record<number, (keyof ReviewSubmission)[]> = {
     0: ["productName", "orderNumber"],
@@ -104,6 +218,9 @@ export default function ReviewWizard({
   };
 
   const next = async () => {
+    // Gate Step 2 for 4–5★: must have clicked Copy & Open
+    if (step === 2 && !canProceedFromStep2) return;
+
     const fields = fieldsByStep[step];
 
     // Special handling for step 1 (Usage & Rating)
@@ -115,17 +232,17 @@ export default function ReviewWizard({
       }
     }
 
-    // ✅ remove `any` by using RHF Path<T>
     const ok = await trigger(fields as Path<ReviewSubmission>[], {
       shouldFocus: true,
     });
     if (!ok) return;
-    setStep((s) => Math.min(s + 1, LAST_STEP)); // go to Summary
+    setStep((s) => Math.min(s + 1, LAST_STEP));
   };
 
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const onSubmit = async (values: ReviewSubmission) => {
+    // Same submit flow for all ratings
     const res = await fetch("/api/reviews", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -136,7 +253,6 @@ export default function ReviewWizard({
     if (!res.ok) {
       if (data?.errors) {
         data.errors.forEach((e: { path: string; message: string }) => {
-          // ✅ remove `any` by casting to Path<ReviewSubmission>
           setError(e.path as Path<ReviewSubmission>, { message: e.message });
         });
       }
@@ -189,8 +305,6 @@ export default function ReviewWizard({
           <CardTitle>Please wait before reviewing</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* if this is a separate component, it was fixed above */}
-          {/* or keep inline text without apostrophes */}
           <div className="p-4 rounded-md bg-yellow-50 text-yellow-800">
             <h3 className="font-medium mb-2">Why do I need to wait?</h3>
             <p className="text-sm">
@@ -340,13 +454,16 @@ export default function ReviewWizard({
               )}
 
               <div>
-                <Label htmlFor="rating">Rating (1–5)</Label>
-                <Input
-                  id="rating"
-                  type="number"
-                  min={1}
-                  max={5}
-                  {...register("rating", { valueAsNumber: true })}
+                <Label htmlFor="rating">Rating</Label>
+                <Controller
+                  name="rating"
+                  control={control}
+                  render={({ field }) => (
+                    <StarRating
+                      value={Number(field.value) || 0}
+                      onChange={(n) => field.onChange(n)}
+                    />
+                  )}
                 />
                 {errors.rating && (
                   <p className="text-red-500 text-sm mt-1">
@@ -357,20 +474,87 @@ export default function ReviewWizard({
             </div>
           )}
 
-          {/* STEP 2: Your Review */}
+          {/* STEP 2: Your Review + (4–5★) external nudge */}
           {step === 2 && (
-            <div>
-              <Label htmlFor="reviewText">Your review</Label>
-              <textarea
-                id="reviewText"
-                className="min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2"
-                placeholder="Please share your experience with the product..."
-                {...register("reviewText")}
-              />
-              {errors.reviewText && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.reviewText.message}
-                </p>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="reviewText">Your review</Label>
+                <textarea
+                  id="reviewText"
+                  className="min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2"
+                  placeholder="Please share your experience with the product..."
+                  {...register("reviewText")}
+                />
+                {errors.reviewText && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {errors.reviewText.message}
+                  </p>
+                )}
+              </div>
+
+              {needsExternalReview && (
+                <div
+                  className={`rounded-xl border p-4 ${
+                    hasOpenedExternal
+                      ? "border-green-500/40"
+                      : "border-amber-500/40"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {hasOpenedExternal ? (
+                      <CheckCircle2 className="mt-0.5 h-5 w-5" />
+                    ) : (
+                      <AlertCircle className="mt-0.5 h-5 w-5" />
+                    )}
+                    <div className="space-y-2">
+                      <p className="font-medium">
+                        Great! Would you share this on the official review page?
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Tap the button to open the product’s review page in a
+                        new tab and copy your text. After that, you can
+                        continue.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            openCopyThenGate({
+                              url: reviewUrl,
+                              text: reviewText || "",
+                              onOpened: () => setHasOpenedExternal(true),
+                            })
+                          }
+                          disabled={!reviewText?.trim()}
+                        >
+                          Copy & open review page{" "}
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </Button>
+                        {reviewUrl && !hasOpenedExternal && (
+                          <a
+                            href={reviewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm underline"
+                            onClick={() => setHasOpenedExternal(true)}
+                          >
+                            Open review page (fallback)
+                          </a>
+                        )}
+                      </div>
+                      {!reviewText?.trim() && (
+                        <p className="text-xs text-muted-foreground">
+                          Add some text above to enable the button.
+                        </p>
+                      )}
+                      {hasOpenedExternal && (
+                        <p className="text-xs text-green-700">
+                          Thanks! You can now continue.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -461,7 +645,11 @@ export default function ReviewWizard({
             </Button>
 
             {step < LAST_STEP ? (
-              <Button type="button" onClick={next} disabled={isSubmitting}>
+              <Button
+                type="button"
+                onClick={next}
+                disabled={isSubmitting || (step === 2 && !canProceedFromStep2)}
+              >
                 Next
               </Button>
             ) : (
@@ -489,4 +677,41 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       </div>
     </div>
   );
+}
+
+// --- Helpers ---
+function buildReviewUrl(
+  campaign: CampaignProps,
+  currentTarget?: ReviewSubmission["target"]
+): string | null {
+  const t = currentTarget || campaign.target;
+  if (!t) return null;
+  if (t.url) return t.url;
+
+  switch (t.platform) {
+    case "amazon": {
+      const host = campaign.marketplace?.tld
+        ? `amazon.${campaign.marketplace.tld}`
+        : "amazon.co.uk";
+      if (t.asin)
+        return `https://www.${host}/review/create-review?asin=${encodeURIComponent(
+          t.asin
+        )}`;
+      return null;
+    }
+    case "google": {
+      if (t.placeId)
+        return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(
+          t.placeId
+        )}`;
+      return null;
+    }
+    case "ebay": {
+      if (t.itemId)
+        return `https://www.ebay.co.uk/itm/${encodeURIComponent(t.itemId)}`;
+      return null;
+    }
+    default:
+      return null;
+  }
 }

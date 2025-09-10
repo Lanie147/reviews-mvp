@@ -6,7 +6,10 @@ const nextConfig: NextConfig = {
     // Allow images from Amazon (tight allowlist)
     remotePatterns: [
       { protocol: "https", hostname: "images-na.ssl-images-amazon.com" },
-      { protocol: "https", hostname: "m.media-amazon.com" }, // if you use this too
+      { protocol: "https", hostname: "m.media-amazon.com" },
+      { protocol: "https", hostname: "images-eu.ssl-images-amazon.com" },
+      // Add more if your feed shows other Amazon CDNs
+      // { protocol: 'https', hostname: 'images.amazon.com' },
     ],
 
     // OR, if you truly need to allow any remote image (not recommended):
