@@ -60,7 +60,7 @@ function StarRating({
   value: number;
   onChange: (v: number) => void;
 }) {
-  const [hover, setHover] = React.useState<number | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
   const display = hover ?? value ?? 0;
 
   return (
@@ -96,7 +96,6 @@ function StarRating({
             className={`h-7 w-7 ${
               display >= n ? "text-yellow-500" : "text-muted-foreground/60"
             }`}
-            // Fill the star when active; lucide icons accept standard SVG props
             fill={display >= n ? "currentColor" : "none"}
           />
         </button>
@@ -109,39 +108,6 @@ function StarRating({
 }
 
 // --- Popup‑safe helper ---
-function openCopyThenGate(opts: {
-  url: string | null;
-  text: string;
-  onOpened: () => void; // setHasOpenedExternal(true)
-}) {
-  const { url, text, onOpened } = opts;
-
-  // 1) Open synchronously to preserve the user gesture
-  let opened = false;
-  if (url) {
-    const win = window.open(url, "_blank", "noopener,noreferrer");
-    if (win) {
-      opened = true;
-      try {
-        win.opener = null;
-      } catch {}
-      try {
-        win.focus();
-      } catch {}
-    }
-  }
-
-  // 2) Fire-and-forget copy (no await before window.open)
-  const trimmed = (text || "").trim();
-  if (trimmed && navigator?.clipboard?.writeText) {
-    navigator.clipboard.writeText(trimmed).catch(() => {});
-  }
-
-  // 3) Gate
-  if (opened) {
-    onOpened();
-  }
-}
 
 export default function ReviewWizard({
   campaign,
@@ -153,6 +119,34 @@ export default function ReviewWizard({
   const [step, setStep] = useState(0);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [hasOpenedExternal, setHasOpenedExternal] = useState(false);
+  const REQUIRED_DELAY_SEC = 10;
+  const [openCountdown, setOpenCountdown] = useState(0);
+  const handleCopyOpen = () => {
+    const text = (reviewText || "").trim();
+
+    // 1) Open FIRST (sync) to keep user gesture
+    let opened = false;
+    if (reviewUrl) {
+      const win = window.open(reviewUrl, "_blank", "noopener,noreferrer");
+      if (win) {
+        opened = true;
+        try {
+          win.opener = null;
+        } catch {}
+        try {
+          win.focus();
+        } catch {}
+      }
+    }
+
+    // 2) Then copy (fire-and-forget)
+    if (text && navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+
+    // 3) Gate
+    if (opened) setHasOpenedExternal(true);
+  };
 
   const form = useForm<ReviewSubmission>({
     resolver: zodResolver(reviewSubmissionSchema),
@@ -197,6 +191,7 @@ export default function ReviewWizard({
   // If rating changes (eg 5 -> 3), reset the external gate
   useEffect(() => {
     setHasOpenedExternal(false);
+    setOpenCountdown(0);
   }, [rating]);
 
   const needsExternalReview = useMemo(
@@ -207,7 +202,9 @@ export default function ReviewWizard({
     () => buildReviewUrl(campaign, target),
     [campaign, target]
   );
-  const canProceedFromStep2 = !needsExternalReview || hasOpenedExternal;
+
+  const canProceedFromStep2 =
+    !needsExternalReview || (hasOpenedExternal && openCountdown <= 0);
 
   const fieldsByStep: Record<number, (keyof ReviewSubmission)[]> = {
     0: ["productName", "orderNumber"],
@@ -216,6 +213,14 @@ export default function ReviewWizard({
     3: ["email", "marketingOptIn"],
     4: [], // summary
   };
+  useEffect(() => {
+    if (!hasOpenedExternal || openCountdown <= 0) return;
+    const id = setInterval(
+      () => setOpenCountdown((s) => Math.max(0, s - 1)),
+      1000
+    );
+    return () => clearInterval(id);
+  }, [hasOpenedExternal, openCountdown]);
 
   const next = async () => {
     // Gate Step 2 for 4–5★: must have clicked Copy & Open
@@ -321,6 +326,8 @@ export default function ReviewWizard({
       </Card>
     );
   }
+  const isActionDisabled = !reviewText?.trim() || !reviewUrl;
+  const canOpen = Boolean(reviewUrl) && Boolean(reviewText?.trim());
 
   return (
     <Card className="max-w-2xl mx-auto">
@@ -368,18 +375,28 @@ export default function ReviewWizard({
                   onValueChange={(asin) => {
                     const product = products.find((p) => p.asin === asin);
                     if (!product) return;
+
+                    // Store the visible label (you already had this)
                     form.setValue("productName", product.title, {
                       shouldValidate: true,
                       shouldDirty: true,
                     });
+
+                    // ✅ Force a normalized target shape for later steps
                     form.setValue(
                       "target",
                       {
-                        platform: campaign.marketplace.platform,
-                        asin: product.asin,
+                        platform: "amazon", // force lowercase string (not enum)
+                        asin: product.asin, // ensure we persist the ASIN here
+                        url: undefined, // explicit (avoids accidental null checks passing)
+                        itemId: undefined,
+                        placeId: undefined,
                       } as NonNullable<ReviewSubmission["target"]>,
                       { shouldValidate: false, shouldDirty: true }
                     );
+
+                    // Optional: if you want to make sure watchers see it immediately:
+                    // void form.trigger("target");
                   }}
                 >
                   <SelectTrigger>
@@ -511,45 +528,60 @@ export default function ReviewWizard({
                         Great! Would you share this on the official review page?
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Tap the button to open the product’s review page in a
-                        new tab and copy your text. After that, you can
+                        Tap the button to open the product&apos;s review page in
+                        a new tab and copy your text. After that, you can
                         continue.
                       </p>
+
                       <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            openCopyThenGate({
-                              url: reviewUrl,
-                              text: reviewText || "",
-                              onOpened: () => setHasOpenedExternal(true),
-                            })
-                          }
-                          disabled={!reviewText?.trim()}
-                        >
-                          Copy & open review page{" "}
-                          <ExternalLink className="ml-2 h-4 w-4" />
-                        </Button>
-                        {reviewUrl && !hasOpenedExternal && (
-                          <a
-                            href={reviewUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm underline"
-                            onClick={() => setHasOpenedExternal(true)}
-                          >
-                            Open review page (fallback)
-                          </a>
+                        {canOpen ? (
+                          // Render an anchor ONLY when we have a real URL
+                          <Button asChild>
+                            <a
+                              href={reviewUrl as string}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => {
+                                const text = (reviewText || "").trim();
+                                if (text && navigator?.clipboard?.writeText) {
+                                  navigator.clipboard
+                                    .writeText(text)
+                                    .catch(() => {});
+                                }
+                                setHasOpenedExternal(true);
+                                setOpenCountdown(REQUIRED_DELAY_SEC); // 👈 start delay
+                              }}
+                            >
+                              Copy & open review page{" "}
+                              <ExternalLink className="ml-2 h-4 w-4" />
+                            </a>
+                          </Button>
+                        ) : (
+                          // If we don't have a URL or text yet, render a non-clickable button (no <a>, no "#")
+                          <Button type="button" disabled>
+                            Copy & open review page{" "}
+                            <ExternalLink className="ml-2 h-4 w-4" />
+                          </Button>
                         )}
                       </div>
-                      {!reviewText?.trim() && (
-                        <p className="text-xs text-muted-foreground">
-                          Add some text above to enable the button.
-                        </p>
-                      )}
                       {hasOpenedExternal && (
                         <p className="text-xs text-green-700">
-                          Thanks! You can now continue.
+                          {openCountdown > 0
+                            ? `Great — you can continue in ${openCountdown}s…`
+                            : "Thanks! You can now continue."}
+                        </p>
+                      )}
+                      {/* Helpful hints */}
+                      {!reviewUrl && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Select your product above so we can open the right
+                          review page.
+                        </p>
+                      )}
+
+                      {reviewUrl && !reviewText?.trim() && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Add some review text to enable the button.
                         </p>
                       )}
                     </div>
@@ -680,35 +712,53 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 // --- Helpers ---
+
 function buildReviewUrl(
   campaign: CampaignProps,
   currentTarget?: ReviewSubmission["target"]
 ): string | null {
   const t = currentTarget || campaign.target;
   if (!t) return null;
-  if (t.url) return t.url;
 
-  switch (t.platform) {
+  // Prefer a direct URL if explicitly provided
+  if (t.url && t.url.trim()) return t.url.trim();
+
+  // Normalize platform defensively (Prisma enum, string, etc.)
+  const platform = String(
+    (t as any).platform ?? campaign?.marketplace?.platform ?? ""
+  )
+    .toLowerCase()
+    .trim();
+
+  // Normalize TLD (fallback to co.uk)
+  const tld = (campaign?.marketplace?.tld || "co.uk").trim();
+
+  // Prefer target.asin over anything else for Amazon
+  const asin = (t as any).asin && String((t as any).asin).trim();
+
+  switch (platform) {
     case "amazon": {
-      const host = campaign.marketplace?.tld
-        ? `amazon.${campaign.marketplace.tld}`
-        : "amazon.co.uk";
-      if (t.asin)
-        return `https://www.${host}/review/create-review?asin=${encodeURIComponent(
-          t.asin
+      if (asin && asin.length >= 10) {
+        return `https://www.amazon.${tld}/review/create-review?asin=${encodeURIComponent(
+          asin
         )}`;
+      }
       return null;
     }
     case "google": {
-      if (t.placeId)
+      const placeId = (t as any).placeId && String((t as any).placeId).trim();
+      if (placeId) {
         return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(
-          t.placeId
+          placeId
         )}`;
+      }
       return null;
     }
     case "ebay": {
-      if (t.itemId)
-        return `https://www.ebay.co.uk/itm/${encodeURIComponent(t.itemId)}`;
+      const itemId = (t as any).itemId && String((t as any).itemId).trim();
+      if (itemId) {
+        return `https://www.ebay.co.uk/itm/${encodeURIComponent(itemId)}`;
+      }
       return null;
     }
     default:
