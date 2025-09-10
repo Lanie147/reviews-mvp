@@ -121,32 +121,6 @@ export default function ReviewWizard({
   const [hasOpenedExternal, setHasOpenedExternal] = useState(false);
   const REQUIRED_DELAY_SEC = 10;
   const [openCountdown, setOpenCountdown] = useState(0);
-  const handleCopyOpen = () => {
-    const text = (reviewText || "").trim();
-
-    // 1) Open FIRST (sync) to keep user gesture
-    let opened = false;
-    if (reviewUrl) {
-      const win = window.open(reviewUrl, "_blank", "noopener,noreferrer");
-      if (win) {
-        opened = true;
-        try {
-          win.opener = null;
-        } catch {}
-        try {
-          win.focus();
-        } catch {}
-      }
-    }
-
-    // 2) Then copy (fire-and-forget)
-    if (text && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).catch(() => {});
-    }
-
-    // 3) Gate
-    if (opened) setHasOpenedExternal(true);
-  };
 
   const form = useForm<ReviewSubmission>({
     resolver: zodResolver(reviewSubmissionSchema),
@@ -326,7 +300,6 @@ export default function ReviewWizard({
       </Card>
     );
   }
-  const isActionDisabled = !reviewText?.trim() || !reviewUrl;
   const canOpen = Boolean(reviewUrl) && Boolean(reviewText?.trim());
 
   return (
@@ -386,9 +359,9 @@ export default function ReviewWizard({
                     form.setValue(
                       "target",
                       {
-                        platform: "amazon", // force lowercase string (not enum)
-                        asin: product.asin, // ensure we persist the ASIN here
-                        url: undefined, // explicit (avoids accidental null checks passing)
+                        platform: "amazon", // force normalized lowercase string
+                        asin: product.asin,
+                        url: undefined,
                         itemId: undefined,
                         placeId: undefined,
                       } as NonNullable<ReviewSubmission["target"]>,
@@ -717,27 +690,22 @@ function buildReviewUrl(
   campaign: CampaignProps,
   currentTarget?: ReviewSubmission["target"]
 ): string | null {
-  const t = currentTarget || campaign.target;
+  const t = currentTarget ?? campaign.target;
   if (!t) return null;
 
-  // Prefer a direct URL if explicitly provided
-  if (t.url && t.url.trim()) return t.url.trim();
+  // If a direct URL was provided, prefer it
+  const direct = t.url?.trim();
+  if (direct) return direct;
 
-  // Normalize platform defensively (Prisma enum, string, etc.)
-  const platform = String(
-    (t as any).platform ?? campaign?.marketplace?.platform ?? ""
-  )
+  // Normalize platform + tld safely
+  const platform = (t.platform || campaign.marketplace?.platform || "")
     .toLowerCase()
     .trim();
-
-  // Normalize TLD (fallback to co.uk)
-  const tld = (campaign?.marketplace?.tld || "co.uk").trim();
-
-  // Prefer target.asin over anything else for Amazon
-  const asin = (t as any).asin && String((t as any).asin).trim();
+  const tld = (campaign.marketplace?.tld || "co.uk").trim();
 
   switch (platform) {
     case "amazon": {
+      const asin = t.asin?.trim();
       if (asin && asin.length >= 10) {
         return `https://www.amazon.${tld}/review/create-review?asin=${encodeURIComponent(
           asin
@@ -745,8 +713,9 @@ function buildReviewUrl(
       }
       return null;
     }
+
     case "google": {
-      const placeId = (t as any).placeId && String((t as any).placeId).trim();
+      const placeId = t.placeId?.trim();
       if (placeId) {
         return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(
           placeId
@@ -754,13 +723,15 @@ function buildReviewUrl(
       }
       return null;
     }
+
     case "ebay": {
-      const itemId = (t as any).itemId && String((t as any).itemId).trim();
+      const itemId = t.itemId?.trim();
       if (itemId) {
         return `https://www.ebay.co.uk/itm/${encodeURIComponent(itemId)}`;
       }
       return null;
     }
+
     default:
       return null;
   }

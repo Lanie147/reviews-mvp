@@ -24,9 +24,6 @@ export default async function Landing({
     );
   }
 
-  // choose primary target (Amazon for now)
-  const t = campaign.targets.find((x) => x.isPrimary) ?? campaign.targets[0];
-
   return (
     <main className="mx-auto max-w-xl p-4 sm:p-6">
       <ReviewWizard
