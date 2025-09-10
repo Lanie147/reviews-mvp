@@ -12,7 +12,6 @@ type BuildArgs = {
 export function buildReviewUrl({
   platform,
   asin,
-  itemId,
   placeId,
   url,
   tld = "co.uk",
