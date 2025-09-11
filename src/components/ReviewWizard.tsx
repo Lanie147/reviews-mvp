@@ -233,32 +233,47 @@ export default function ReviewWizard({
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const onSubmit = async (values: ReviewSubmission) => {
-    setSubmitError(null); // clear any previous error
+    setSubmitError(null);
 
     try {
       const res = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Avoid any odd caching on some mobile browsers
         cache: "no-store",
         body: JSON.stringify(values),
       });
 
-      // Be resilient: the response may not always be JSON (e.g., 500 HTML)
+      // Read as text first; response may not be JSON on some failures
       const raw = await res.text();
-      let data: any = null;
-      try {
-        data = raw ? JSON.parse(raw) : null;
-      } catch {
-        data = null;
+      let data: unknown = null;
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = null;
+        }
       }
 
+      // Type helpers (no 'any')
+      type ApiErrorItem = { path: string; message: string };
+      type ApiFail = { ok?: false; errors?: ApiErrorItem[]; error?: string };
+      type ApiOk = { ok?: true; id?: string };
+
+      const hasErrorsArray = (x: unknown): x is { errors: ApiErrorItem[] } =>
+        typeof x === "object" && x !== null && Array.isArray((x as any).errors);
+
+      const hasErrorMessage = (x: unknown): x is { error: string } =>
+        typeof x === "object" &&
+        x !== null &&
+        typeof (x as any).error === "string";
+
       if (!res.ok) {
-        // Server-side validation errors (422/409/404) -> show inline + jump to step
-        if (data?.errors?.length) {
-          data.errors.forEach((e: { path: string; message: string }) => {
+        // 422/409/404 with validation errors
+        if (hasErrorsArray(data)) {
+          data.errors.forEach((e) => {
             setError(e.path as Path<ReviewSubmission>, { message: e.message });
           });
+
           const firstErrorPath = data.errors[0]?.path as
             | keyof ReviewSubmission
             | undefined;
@@ -273,19 +288,23 @@ export default function ReviewWizard({
           return;
         }
 
-        // Non-validation failure: show a friendly message
-        setSubmitError(
-          (data?.error as string) ||
-            `Submission failed (${res.status}). Please try again.`
-        );
+        // Generic server failure
+        const msg =
+          (hasErrorMessage(data) && data.error) ||
+          `Submission failed (${res.status}). Please try again.`;
+        setSubmitError(msg);
         return;
       }
 
-      const id = (data && data.id) || "ok";
-      setSubmittedId(id);
+      // Success
+      const okData = (data ?? {}) as ApiOk;
+      setSubmittedId(okData.id ?? "ok");
       setStep(STEPS.length); // success screen
-    } catch (err) {
-      // Network/JSON parse/etc.
+    } catch (error) {
+      // Use the variable so eslint doesn't warn about unused
+      if (process.env.NODE_ENV !== "production") {
+        console.error("Submit error:", error);
+      }
       setSubmitError(
         "We couldn’t submit due to a network error. Please check your connection and try again."
       );
