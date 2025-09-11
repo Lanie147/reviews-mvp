@@ -200,6 +200,14 @@ export default function ReviewWizard({
     4: [], // summary
   };
   useEffect(() => {
+    if (submitError) {
+      document.getElementById("submit-error")?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [submitError]);
+  useEffect(() => {
     if (!hasOpenedExternal || openCountdown <= 0) return;
     const id = setInterval(
       () => setOpenCountdown((s) => Math.max(0, s - 1)),
@@ -288,8 +296,9 @@ export default function ReviewWizard({
           }
         }
 
-        // Debug surface: helps diagnose mobile-only issues
+        // Debug surface
         const preview = raw ? raw.slice(0, 200) : "";
+
         if (!res.ok) {
           if (hasErrorsArray(data)) {
             data.errors.forEach((e) => {
@@ -297,11 +306,9 @@ export default function ReviewWizard({
                 message: e.message,
               });
             });
-
             const firstErrorPath = data.errors[0]?.path as
               | keyof ReviewSubmission
               | undefined;
-
             if (firstErrorPath) {
               const targetStep =
                 Object.entries(fieldsByStep).find(([, arr]) =>
@@ -312,11 +319,13 @@ export default function ReviewWizard({
             return;
           }
 
-          setSubmitError(
-            `HTTP ${res.status} (${
-              res.redirected ? "redirected" : "no redirect"
-            }) from ${new URL(res.url).pathname}. Body: ${preview || "—"}`
-          );
+          const message = hasErrorMessage(data)
+            ? data.error
+            : `HTTP ${res.status} (${
+                res.redirected ? "redirected" : "no redirect"
+              }) from ${new URL(res.url).pathname}. Body: ${preview || "—"}`;
+
+          setSubmitError(message);
           return;
         }
 
@@ -789,6 +798,16 @@ export default function ReviewWizard({
               </Button>
             )}
           </div>
+          {submitError && (
+            <p
+              id="submit-error"
+              role="alert"
+              aria-live="polite"
+              className="mt-3 text-sm text-red-600"
+            >
+              {submitError}
+            </p>
+          )}
         </form>
       </CardContent>
     </Card>
