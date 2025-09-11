@@ -235,93 +235,102 @@ export default function ReviewWizard({
   const onSubmit = async (values: ReviewSubmission) => {
     setSubmitError(null);
 
-    try {
-      const res = await fetch("/api/reviews", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify(values),
-      });
+    // Try the alias first (less likely to be blocked), then the original
+    const endpoints = ["/api/submit", "/api/reviews"];
 
-      // Read as text first; response may not be JSON on some failures
-      const raw = await res.text();
-      let data: unknown = null;
-      if (raw) {
-        try {
-          data = JSON.parse(raw);
-        } catch {
-          data = null;
-        }
-      }
+    type ApiErrorItem = { path: string; message: string };
+    type ApiOk = { ok?: true; id?: string };
 
-      // Type helpers (no 'any')
-      type ApiErrorItem = { path: string; message: string };
-      type ApiOk = { ok?: true; id?: string };
-
-      const hasErrorsArray = (x: unknown): x is { errors: ApiErrorItem[] } => {
-        if (typeof x !== "object" || x === null || !("errors" in x))
-          return false;
-        const errs = (x as { errors: unknown }).errors;
-        if (!Array.isArray(errs)) return false;
-        return errs.every(
-          (e): e is ApiErrorItem =>
-            typeof e === "object" &&
-            e !== null &&
-            "path" in (e as Record<string, unknown>) &&
-            "message" in (e as Record<string, unknown>) &&
-            typeof (e as { path: unknown }).path === "string" &&
-            typeof (e as { message: unknown }).message === "string"
-        );
-      };
-
-      const hasErrorMessage = (x: unknown): x is { error: string } =>
-        typeof x === "object" &&
-        x !== null &&
-        "error" in x &&
-        typeof (x as { error: unknown }).error === "string";
-
-      if (!res.ok) {
-        // 422/409/404 with validation errors
-        if (hasErrorsArray(data)) {
-          data.errors.forEach((e) => {
-            setError(e.path as Path<ReviewSubmission>, { message: e.message });
-          });
-
-          const firstErrorPath = data.errors[0]?.path as
-            | keyof ReviewSubmission
-            | undefined;
-
-          if (firstErrorPath) {
-            const targetStep =
-              Object.entries(fieldsByStep).find(([, arr]) =>
-                arr.includes(firstErrorPath)
-              )?.[0] ?? "0";
-            setStep(parseInt(targetStep, 10));
-          }
-          return;
-        }
-
-        // Generic server failure
-        const msg =
-          (hasErrorMessage(data) && data.error) ||
-          `Submission failed (${res.status}). Please try again.`;
-        setSubmitError(msg);
-        return;
-      }
-
-      // Success
-      const okData = (data ?? {}) as ApiOk;
-      setSubmittedId(okData.id ?? "ok");
-      setStep(STEPS.length); // success screen
-    } catch (error) {
-      // Use the variable so eslint doesn't warn about unused
-      if (process.env.NODE_ENV !== "production") {
-        console.error("Submit error:", error);
-      }
-      setSubmitError(
-        "We couldn’t submit due to a network error. Please check your connection and try again."
+    const hasErrorsArray = (x: unknown): x is { errors: ApiErrorItem[] } => {
+      if (typeof x !== "object" || x === null || !("errors" in x)) return false;
+      const errs = (x as { errors: unknown }).errors;
+      if (!Array.isArray(errs)) return false;
+      return errs.every(
+        (e): e is ApiErrorItem =>
+          typeof e === "object" &&
+          e !== null &&
+          "path" in (e as Record<string, unknown>) &&
+          "message" in (e as Record<string, unknown>) &&
+          typeof (e as { path: unknown }).path === "string" &&
+          typeof (e as { message: unknown }).message === "string"
       );
+    };
+
+    const hasErrorMessage = (x: unknown): x is { error: string } =>
+      typeof x === "object" &&
+      x !== null &&
+      "error" in x &&
+      typeof (x as { error: unknown }).error === "string";
+
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          // keepalive helps Safari/iOS not kill the request if user switches apps
+          keepalive: true,
+          credentials: "same-origin",
+          body: JSON.stringify(values),
+        });
+
+        const raw = await res.text();
+        let data: unknown = null;
+        if (raw) {
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            data = null;
+          }
+        }
+
+        if (!res.ok) {
+          if (hasErrorsArray(data)) {
+            data.errors.forEach((e) => {
+              setError(e.path as Path<ReviewSubmission>, {
+                message: e.message,
+              });
+            });
+
+            const firstErrorPath = data.errors[0]?.path as
+              | keyof ReviewSubmission
+              | undefined;
+
+            if (firstErrorPath) {
+              const targetStep =
+                Object.entries(fieldsByStep).find(([, arr]) =>
+                  arr.includes(firstErrorPath)
+                )?.[0] ?? "0";
+              setStep(parseInt(targetStep, 10));
+            }
+            return; // validation handled
+          }
+
+          const msg =
+            (hasErrorMessage(data) && (data as { error: string }).error) ||
+            `Submission failed (${res.status}). Please try again.`;
+          setSubmitError(msg);
+          return; // server responded, no need to try next endpoint
+        }
+
+        // Success
+        const okData = (data ?? {}) as ApiOk;
+        setSubmittedId(okData.id ?? "ok");
+        setStep(STEPS.length);
+        return;
+      } catch (error) {
+        // Fetch threw (blocked/aborted). Try next endpoint.
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Submit network error on", url, error);
+        }
+        continue;
+      }
     }
+
+    // If we got here, both endpoints failed to even reach the server
+    setSubmitError(
+      "We couldn’t submit due to a network error. If you’re using an in-app browser or content blocker, please open this page in Safari/Chrome and try again."
+    );
   };
 
   // Prevent implicit submit before final step
