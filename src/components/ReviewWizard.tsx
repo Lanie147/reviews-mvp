@@ -235,9 +235,14 @@ export default function ReviewWizard({
   const onSubmit = async (values: ReviewSubmission) => {
     setSubmitError(null);
 
-    // Build absolute URLs (handles any mobile base/origin quirks)
+    // Absolute URLs + both slash/no-slash variants
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const endpoints = [`${origin}/api/submit`, `${origin}/api/reviews`];
+    const endpoints = [
+      `${origin}/api/submit`,
+      `${origin}/api/submit/`,
+      `${origin}/api/reviews`,
+      `${origin}/api/reviews/`,
+    ];
 
     type ApiErrorItem = { path: string; message: string };
     type ApiOk = { ok?: true; id?: string };
@@ -269,7 +274,6 @@ export default function ReviewWizard({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
-          // NOTE: removed keepalive; Safari can throw on POST+keepalive
           credentials: "same-origin",
           body: JSON.stringify(values),
         });
@@ -280,10 +284,12 @@ export default function ReviewWizard({
           try {
             data = JSON.parse(raw);
           } catch {
-            data = null;
+            // keep raw for preview below
           }
         }
 
+        // Debug surface: helps diagnose mobile-only issues
+        const preview = raw ? raw.slice(0, 200) : "";
         if (!res.ok) {
           if (hasErrorsArray(data)) {
             data.errors.forEach((e) => {
@@ -303,39 +309,35 @@ export default function ReviewWizard({
                 )?.[0] ?? "0";
               setStep(parseInt(targetStep, 10));
             }
-            return; // validation handled
+            return;
           }
 
-          const msg =
-            (hasErrorMessage(data) && (data as { error: string }).error) ||
-            `Submission failed (${res.status}). Please try again.`;
-          setSubmitError(msg);
-          return; // server responded
+          setSubmitError(
+            `HTTP ${res.status} (${
+              res.redirected ? "redirected" : "no redirect"
+            }) from ${new URL(res.url).pathname}. Body: ${preview || "—"}`
+          );
+          return;
         }
 
+        // Success
         const okData = (data ?? {}) as ApiOk;
         setSubmittedId(okData.id ?? "ok");
         setStep(STEPS.length);
         return;
       } catch (error) {
-        // Show the actual error message to diagnose mobile issues
         const msg =
           (error instanceof Error && error.message) ||
           String(error) ||
           "Network error";
-        if (process.env.NODE_ENV !== "production") {
-          console.error("Submit network error on", url, error);
-        }
-        // Try next endpoint; if all fail, we'll show a friendly message below
-        // But keep the most recent error detail around for the user:
-        setSubmitError(`Network error: ${msg}`);
+        setSubmitError(`Network error on ${url}: ${msg}`);
+        // try next variant
         continue;
       }
     }
 
-    // If we get here both endpoints threw at fetch()
     setSubmitError(
-      "We couldn’t submit due to a network error. If you’re using an in-app browser or content blocker, please open this page in Safari/Chrome and try again."
+      "We couldn’t submit due to a network error. If you’re in an in-app browser or using a content blocker, open this page in Safari/Chrome and try again."
     );
   };
 
@@ -417,7 +419,7 @@ export default function ReviewWizard({
 
       <CardContent>
         <form
-          onSubmit={preventImplicitSubmit} // 👈 block submit until final step
+          onSubmit={preventImplicitSubmit}
           className="space-y-6"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !isFinalStep) {
@@ -770,10 +772,9 @@ export default function ReviewWizard({
             </Button>
 
             {isFinalStep ? (
-              // Final step: explicitly trigger RHF submit
               <Button
                 type="button"
-                onClick={handleSubmit(onSubmit)} // 👈 submit only here
+                onClick={handleSubmit(onSubmit)}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Submitting…" : "Confirm & Submit"}
