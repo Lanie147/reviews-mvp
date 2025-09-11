@@ -108,6 +108,17 @@ function StarRating({
 }
 
 // --- Popup‑safe helper ---
+// Auto-format: 3-7-7 pattern for Amazon orders
+function formatAmazonOrder(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 17); // 3 + 7 + 7 = 17 digits
+  const p1 = digits.slice(0, 3);
+  const p2 = digits.slice(3, 10);
+  const p3 = digits.slice(10, 17);
+  let out = p1;
+  if (p2) out += `-${p2}`;
+  if (p3) out += `-${p3}`;
+  return out;
+}
 
 export default function ReviewWizard({
   campaign,
@@ -179,6 +190,7 @@ export default function ReviewWizard({
 
   const canProceedFromStep2 =
     !needsExternalReview || (hasOpenedExternal && openCountdown <= 0);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const fieldsByStep: Record<number, (keyof ReviewSubmission)[]> = {
     0: ["productName", "orderNumber"],
@@ -221,35 +233,63 @@ export default function ReviewWizard({
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const onSubmit = async (values: ReviewSubmission) => {
-    // Same submit flow for all ratings
-    const res = await fetch("/api/reviews", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    const data = await res.json();
+    setSubmitError(null); // clear any previous error
 
-    if (!res.ok) {
-      if (data?.errors) {
-        data.errors.forEach((e: { path: string; message: string }) => {
-          setError(e.path as Path<ReviewSubmission>, { message: e.message });
-        });
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Avoid any odd caching on some mobile browsers
+        cache: "no-store",
+        body: JSON.stringify(values),
+      });
+
+      // Be resilient: the response may not always be JSON (e.g., 500 HTML)
+      const raw = await res.text();
+      let data: any = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = null;
       }
-      const firstErrorPath = data?.errors?.[0]?.path as
-        | keyof ReviewSubmission
-        | undefined;
-      if (firstErrorPath) {
-        const targetStep =
-          Object.entries(fieldsByStep).find(([, arr]) =>
-            arr.includes(firstErrorPath)
-          )?.[0] ?? "0";
-        setStep(parseInt(targetStep, 10));
+
+      if (!res.ok) {
+        // Server-side validation errors (422/409/404) -> show inline + jump to step
+        if (data?.errors?.length) {
+          data.errors.forEach((e: { path: string; message: string }) => {
+            setError(e.path as Path<ReviewSubmission>, { message: e.message });
+          });
+          const firstErrorPath = data.errors[0]?.path as
+            | keyof ReviewSubmission
+            | undefined;
+
+          if (firstErrorPath) {
+            const targetStep =
+              Object.entries(fieldsByStep).find(([, arr]) =>
+                arr.includes(firstErrorPath)
+              )?.[0] ?? "0";
+            setStep(parseInt(targetStep, 10));
+          }
+          return;
+        }
+
+        // Non-validation failure: show a friendly message
+        setSubmitError(
+          (data?.error as string) ||
+            `Submission failed (${res.status}). Please try again.`
+        );
+        return;
       }
-      return;
+
+      const id = (data && data.id) || "ok";
+      setSubmittedId(id);
+      setStep(STEPS.length); // success screen
+    } catch (err) {
+      // Network/JSON parse/etc.
+      setSubmitError(
+        "We couldn’t submit due to a network error. Please check your connection and try again."
+      );
     }
-
-    setSubmittedId(data.id ?? "ok");
-    setStep(STEPS.length); // success screen
   };
 
   // Prevent implicit submit before final step
@@ -401,18 +441,50 @@ export default function ReviewWizard({
 
               <div>
                 <Label htmlFor="orderNumber">Amazon order number</Label>
-                <Input
-                  id="orderNumber"
-                  placeholder="123-1234567-1234567"
-                  {...register("orderNumber")}
+
+                <Controller
+                  name="orderNumber"
+                  control={control}
+                  render={({ field }) => (
+                    <Input
+                      id="orderNumber"
+                      // Keep as text so we can include dashes
+                      type="text"
+                      inputMode="numeric" // mobile shows number keypad
+                      pattern="\d*" // hint for numeric
+                      maxLength={19} // 17 digits + 2 dashes
+                      placeholder="123-1234567-1234567"
+                      autoComplete="one-time-code"
+                      {...field}
+                      value={field.value ?? ""}
+                      onChange={(e) => {
+                        const formatted = formatAmazonOrder(e.target.value);
+                        field.onChange(formatted);
+                      }}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const text = e.clipboardData.getData("text") || "";
+                        field.onChange(formatAmazonOrder(text));
+                      }}
+                      onBlur={(e) => {
+                        // Reformat again on blur (in case of odd edits)
+                        const formatted = formatAmazonOrder(e.target.value);
+                        field.onChange(formatted);
+                        field.onBlur();
+                      }}
+                      aria-invalid={!!errors.orderNumber}
+                    />
+                  )}
                 />
+
                 {errors.orderNumber && (
                   <p className="text-red-500 text-sm mt-1">
                     {errors.orderNumber.message}
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">
-                  Find this in your Amazon order confirmation email.
+                  Format: 123-1234567-1234567 (find it in your Amazon order
+                  email).
                 </p>
               </div>
             </div>
@@ -665,6 +737,15 @@ export default function ReviewWizard({
               >
                 {isSubmitting ? "Submitting…" : "Confirm & Submit"}
               </Button>
+            )}
+            {submitError && (
+              <p
+                className="text-sm text-red-600 mt-2"
+                role="alert"
+                aria-live="polite"
+              >
+                {submitError}
+              </p>
             )}
           </div>
         </form>
