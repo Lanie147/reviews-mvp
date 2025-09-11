@@ -235,8 +235,9 @@ export default function ReviewWizard({
   const onSubmit = async (values: ReviewSubmission) => {
     setSubmitError(null);
 
-    // Try the alias first (less likely to be blocked), then the original
-    const endpoints = ["/api/submit", "/api/reviews"];
+    // Build absolute URLs (handles any mobile base/origin quirks)
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const endpoints = [`${origin}/api/submit`, `${origin}/api/reviews`];
 
     type ApiErrorItem = { path: string; message: string };
     type ApiOk = { ok?: true; id?: string };
@@ -268,8 +269,7 @@ export default function ReviewWizard({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
-          // keepalive helps Safari/iOS not kill the request if user switches apps
-          keepalive: true,
+          // NOTE: removed keepalive; Safari can throw on POST+keepalive
           credentials: "same-origin",
           body: JSON.stringify(values),
         });
@@ -310,35 +310,36 @@ export default function ReviewWizard({
             (hasErrorMessage(data) && (data as { error: string }).error) ||
             `Submission failed (${res.status}). Please try again.`;
           setSubmitError(msg);
-          return; // server responded, no need to try next endpoint
+          return; // server responded
         }
 
-        // Success
         const okData = (data ?? {}) as ApiOk;
         setSubmittedId(okData.id ?? "ok");
         setStep(STEPS.length);
         return;
       } catch (error) {
-        // Fetch threw (blocked/aborted). Try next endpoint.
+        // Show the actual error message to diagnose mobile issues
+        const msg =
+          (error instanceof Error && error.message) ||
+          String(error) ||
+          "Network error";
         if (process.env.NODE_ENV !== "production") {
           console.error("Submit network error on", url, error);
         }
+        // Try next endpoint; if all fail, we'll show a friendly message below
+        // But keep the most recent error detail around for the user:
+        setSubmitError(`Network error: ${msg}`);
         continue;
       }
     }
 
-    // If we got here, both endpoints failed to even reach the server
+    // If we get here both endpoints threw at fetch()
     setSubmitError(
       "We couldn’t submit due to a network error. If you’re using an in-app browser or content blocker, please open this page in Safari/Chrome and try again."
     );
   };
 
   // Prevent implicit submit before final step
-  const preventImplicitSubmit: React.FormEventHandler<HTMLFormElement> = (
-    e
-  ) => {
-    if (!isFinalStep) e.preventDefault();
-  };
 
   if (submittedId) {
     return (
@@ -382,7 +383,12 @@ export default function ReviewWizard({
     );
   }
   const canOpen = Boolean(reviewUrl) && Boolean(reviewText?.trim());
-
+  // Prevent submit on intermediate steps (mobile "Go/Done" keys)
+  const preventImplicitSubmit: React.FormEventHandler<HTMLFormElement> = (
+    e
+  ) => {
+    if (!isFinalStep) e.preventDefault();
+  };
   return (
     <Card className="max-w-2xl mx-auto">
       <CardHeader>
@@ -411,7 +417,7 @@ export default function ReviewWizard({
 
       <CardContent>
         <form
-          onSubmit={preventImplicitSubmit}
+          onSubmit={preventImplicitSubmit} // 👈 block submit until final step
           className="space-y-6"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !isFinalStep) {
@@ -686,6 +692,7 @@ export default function ReviewWizard({
                   id="email"
                   type="email"
                   placeholder="you@example.com"
+                  enterKeyHint={isFinalStep ? "done" : "next"}
                   {...register("email")}
                 />
                 {errors.email && (
@@ -752,7 +759,7 @@ export default function ReviewWizard({
           )}
 
           {/* Navigation */}
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center justify-between mt-6">
             <Button
               type="button"
               variant="ghost"
@@ -762,7 +769,16 @@ export default function ReviewWizard({
               Back
             </Button>
 
-            {step < LAST_STEP ? (
+            {isFinalStep ? (
+              // Final step: explicitly trigger RHF submit
+              <Button
+                type="button"
+                onClick={handleSubmit(onSubmit)} // 👈 submit only here
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Submitting…" : "Confirm & Submit"}
+              </Button>
+            ) : (
               <Button
                 type="button"
                 onClick={next}
@@ -770,23 +786,6 @@ export default function ReviewWizard({
               >
                 Next
               </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={handleSubmit(onSubmit)}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Submitting…" : "Confirm & Submit"}
-              </Button>
-            )}
-            {submitError && (
-              <p
-                className="text-sm text-red-600 mt-2"
-                role="alert"
-                aria-live="polite"
-              >
-                {submitError}
-              </p>
             )}
           </div>
         </form>

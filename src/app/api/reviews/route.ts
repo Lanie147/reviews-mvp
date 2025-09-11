@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { reviewSubmissionSchema } from "@/lib/validation/review";
 import { prisma } from "@/lib/prisma"; // ensure this exists; create if needed
-
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
