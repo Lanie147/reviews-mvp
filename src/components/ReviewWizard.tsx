@@ -256,16 +256,29 @@ export default function ReviewWizard({
 
       // Type helpers (no 'any')
       type ApiErrorItem = { path: string; message: string };
-      type ApiFail = { ok?: false; errors?: ApiErrorItem[]; error?: string };
       type ApiOk = { ok?: true; id?: string };
 
-      const hasErrorsArray = (x: unknown): x is { errors: ApiErrorItem[] } =>
-        typeof x === "object" && x !== null && Array.isArray((x as any).errors);
+      const hasErrorsArray = (x: unknown): x is { errors: ApiErrorItem[] } => {
+        if (typeof x !== "object" || x === null || !("errors" in x))
+          return false;
+        const errs = (x as { errors: unknown }).errors;
+        if (!Array.isArray(errs)) return false;
+        return errs.every(
+          (e): e is ApiErrorItem =>
+            typeof e === "object" &&
+            e !== null &&
+            "path" in (e as Record<string, unknown>) &&
+            "message" in (e as Record<string, unknown>) &&
+            typeof (e as { path: unknown }).path === "string" &&
+            typeof (e as { message: unknown }).message === "string"
+        );
+      };
 
       const hasErrorMessage = (x: unknown): x is { error: string } =>
         typeof x === "object" &&
         x !== null &&
-        typeof (x as any).error === "string";
+        "error" in x &&
+        typeof (x as { error: unknown }).error === "string";
 
       if (!res.ok) {
         // 422/409/404 with validation errors
