@@ -75,6 +75,7 @@ export async function GET(req: Request) {
   const productName = searchParams.get("productName");
   const campaignId = searchParams.get("campaignId");
 
+  const crypto = await import("crypto");
   const ipHash = crypto
     .createHash("sha256")
     .update(
