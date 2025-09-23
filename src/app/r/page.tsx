@@ -35,7 +35,7 @@ export default async function GenericLanding() {
   // Synthetic campaign object for rendering the wizard at /r
   // (Submit will use campaign.id ?? form.product?.id, so this can omit an id)
   const campaign: CampaignProps = {
-    id: "global",
+    id: "", // <- dummy/falsy id to satisfy types
     name: "Leave a Review",
     productName: "Choose your product",
     asin: null,

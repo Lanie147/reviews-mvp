@@ -1,9 +1,8 @@
 "use client";
-
 import React from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -11,21 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import Image from "next/image";
 
 export type ProductOption = {
-  id: string;
+  id: string; // campaign id in your effective list
   name: string;
   asin?: string | null;
   imageUrl?: string | null;
-};
-
-type Props = {
-  product: ProductOption | null;
-  productOptions: ProductOption[];
-  orderNumber: string;
-  onSelectProduct: (id: string) => void;
-  onOrderNumberChange: (value: string) => void;
-  onNext: () => void;
 };
 
 export default function StepProductOrder({
@@ -35,58 +26,80 @@ export default function StepProductOrder({
   onSelectProduct,
   onOrderNumberChange,
   onNext,
-}: Props) {
-  React.useEffect(() => {
-    if (!product && productOptions.length > 0) {
-      onSelectProduct(productOptions[0].id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product, productOptions]);
-  const canNext = Boolean(product) && orderNumber.trim().length > 0;
-  const selectedId = product?.id ?? productOptions[0]?.id ?? "";
+}: {
+  product: ProductOption | null;
+  productOptions: ProductOption[];
+  orderNumber: string;
+  onSelectProduct: (id: string) => void;
+  onOrderNumberChange: (value: string) => void;
+  onNext: () => void;
+}) {
+  const canContinue =
+    !!product && /^\d{3}-\d{7}-\d{7}$/.test(orderNumber.trim());
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Product picker */}
       <div className="space-y-2">
-        <Label htmlFor="product">Product</Label>
-        <Select
-          key={productOptions.map((p) => p.id).join("|")}
-          value={selectedId}
-          defaultValue={selectedId}
-          onValueChange={(v) => onSelectProduct(v)}
-        >
-          <SelectTrigger id="product" className="w-full">
-            <SelectValue placeholder="Select ASIN" />
-          </SelectTrigger>
-          <SelectContent>
-            {productOptions.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {/* Show ONLY the ASIN (fallback to id if needed) */}
-                {p.asin ?? p.id}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label htmlFor="product" className="text-sm">
+          Product
+        </Label>
+        <div className="flex items-center gap-3">
+          {product?.imageUrl ? (
+            <div className="shrink-0">
+              <Image
+                src={product.imageUrl}
+                alt={product.name}
+                width={64}
+                height={64}
+                className="rounded-lg object-cover aspect-square"
+              />
+            </div>
+          ) : null}
+          <Select
+            defaultValue={product?.id}
+            onValueChange={(v) => onSelectProduct(v)}
+          >
+            <SelectTrigger id="product" className="h-12 text-base">
+              <SelectValue placeholder="Select product" />
+            </SelectTrigger>
+            <SelectContent>
+              {productOptions.map((p) => (
+                <SelectItem key={p.id} value={p.id} className="py-3 text-base">
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
+      {/* Order number */}
       <div className="space-y-2">
-        <Label htmlFor="order">Amazon order number</Label>
+        <Label htmlFor="orderNumber" className="text-sm">
+          Amazon order number
+        </Label>
         <Input
-          id="order"
+          id="orderNumber"
           inputMode="numeric"
           placeholder="123-1234567-1234567"
+          className="h-12 text-base"
           value={orderNumber}
           onChange={(e) => onOrderNumberChange(e.target.value)}
-          autoComplete="off"
         />
         <p className="text-xs text-muted-foreground">
-          We use this only to verify purchases for rewards. It’s never shared.
+          Find it in your Amazon order email/receipts.
         </p>
       </div>
 
-      <div className="flex justify-end pt-2">
-        <Button type="button" onClick={onNext} disabled={!canNext}>
-          Next
+      <div className="pt-2">
+        <Button
+          type="button"
+          className="h-12 w-full"
+          disabled={!canContinue}
+          onClick={onNext}
+        >
+          Continue
         </Button>
       </div>
     </div>

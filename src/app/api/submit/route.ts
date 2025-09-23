@@ -95,7 +95,7 @@ export async function POST(req: Request) {
     const submission = await prisma.reviewSubmission.create({
       data: {
         campaign: { connect: { id: campaign.id } },
-        campaignName: body.campaignName, // keep your snapshot, or use campaign.name
+        campaignName: campaign.name, // keep your snapshot, or use campaign.name
         marketplace: marketplaceJson,
         rating: body.rating,
         used7Days: body.used7Days,
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
         orderNumber: body.orderNumber,
         email: body.email ?? null,
         marketingOptIn: body.marketingOptIn,
-        productName: body.productName,
+        productName: body.productName ?? campaign.name,
         ...(body.targetId
           ? { target: { connect: { id: body.targetId } } }
           : {}),

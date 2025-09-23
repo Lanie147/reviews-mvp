@@ -1,4 +1,4 @@
-// src/components/ReviewWizard.tsx
+// src/components/ReviewWizard.tsx (mobile-friendly, preserves your logic + confetti on submit)
 "use client";
 
 import React, {
@@ -44,6 +44,74 @@ type Props = {
   productOptions?: ProductOption[];
 };
 
+/**
+ * Tiny hook to fire celebratory confetti from the top of the screen.
+ * Uses a dynamic import to avoid SSR issues.
+ * Install once:  npm i canvas-confetti
+ */
+function useConfetti() {
+  const firingRef = useRef(false);
+
+  // 🇬🇧 / 🇫🇷 style red-white-blue (tweak to your exact brand hexes)
+  const COLORS = useMemo(() => ["#0052A5", "#FFFFFF", "#D0021B"], []);
+  return useCallback(
+    async (opts?: { anchor?: HTMLElement | null; durationMs?: number }) => {
+      if (firingRef.current) return;
+      firingRef.current = true;
+
+      const confetti = (await import("canvas-confetti")).default;
+      const { anchor = null, durationMs = 1600 } = opts || {};
+
+      // compute origin from bottom of the anchor/card
+      let startY = 0.9;
+      if (anchor && typeof window !== "undefined") {
+        const rect = anchor.getBoundingClientRect();
+        startY = Math.min(
+          0.98,
+          Math.max(0.05, rect.bottom / window.innerHeight)
+        );
+      }
+
+      const end = Date.now() + durationMs;
+
+      // sweeping bursts across the screen
+      const columns = [0.1, 0.25, 0.4, 0.6, 0.75, 0.9];
+      columns.forEach((x, i) => {
+        setTimeout(() => {
+          confetti({
+            particleCount: 40,
+            startVelocity: 55,
+            spread: 80,
+            angle: 90,
+            ticks: 200,
+            origin: { x, y: startY },
+            scalar: 0.9,
+            colors: COLORS, // 👈 add colors here
+            shapes: ["square", "circle"], // optional variety
+          });
+        }, i * 90);
+      });
+
+      // drizzle for the duration
+      (function frame() {
+        confetti({
+          particleCount: 12,
+          startVelocity: 45,
+          spread: 70,
+          angle: 90,
+          ticks: 160,
+          origin: { x: Math.random(), y: startY },
+          scalar: 0.85,
+          colors: COLORS, // 👈 and here
+        });
+        if (Date.now() < end) requestAnimationFrame(frame);
+        else firingRef.current = false;
+      })();
+    },
+    [COLORS]
+  );
+}
+
 // ----- Component -----
 export default function ReviewWizard({ campaign, productOptions }: Props) {
   // Steps: 0..4 (5 steps)
@@ -75,20 +143,23 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
   // Timer for gating “Next” after opening review page
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Anchor element for confetti origin (bottom of the card)
+  const cardAnchorRef = useRef<HTMLDivElement | null>(null);
+
   const stepsTotal = 5;
   const progress = useMemo(
     () => ((step + 1) / stepsTotal) * 100,
     [step, stepsTotal]
   );
   const effectiveProductOptions = useMemo<ProductOption[]>(() => {
-    // if parent passed options, use them
-    if (productOptions && productOptions.length > 0) return productOptions;
+    // If parent passed options (from /r), use them (they already have real campaign ids)
+    if (productOptions?.length) return productOptions;
 
-    // fallback to campaign-level ASIN so the Select always has at least one item
-    if (campaign.asin) {
+    // Fallback for product-specific pages: build a single option from the current campaign
+    if (campaign.id && campaign.asin) {
       return [
         {
-          id: campaign.asin,
+          id: campaign.id, // <-- real campaign id, not ASIN
           name: campaign.productName,
           asin: campaign.asin,
           imageUrl: campaign.imageUrl ?? null,
@@ -96,7 +167,30 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
       ];
     }
     return [];
-  }, [productOptions, campaign.asin, campaign.productName, campaign.imageUrl]);
+  }, [
+    productOptions,
+    campaign.id,
+    campaign.asin,
+    campaign.productName,
+    campaign.imageUrl,
+  ]);
+
+  // 2) Auto-select first option if none chosen (prevents "Please pick a product")
+  useEffect(() => {
+    if (!form.product && effectiveProductOptions.length > 0) {
+      setForm((f) => ({ ...f, product: effectiveProductOptions[0] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveProductOptions]);
+
+  // 3) Use the effective list when selecting by id
+  const selectProductById = useCallback(
+    (id: string) => {
+      const found = effectiveProductOptions.find((p) => p.id === id) ?? null;
+      setForm((f) => ({ ...f, product: found }));
+    },
+    [effectiveProductOptions]
+  );
   // Derived list of targets
 
   // Build review URL for the chosen target
@@ -195,26 +289,21 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
     setForm((f) => ({ ...f, marketingOptIn: value }));
   }, []);
 
-  const selectProductById = useCallback(
-    (id: string) => {
-      const options: ProductOption[] =
-        productOptions ??
-        (campaign.asin
-          ? [
-              {
-                id: campaign.asin,
-                name: campaign.productName,
-                asin: campaign.asin,
-                imageUrl: campaign.imageUrl ?? undefined,
-              },
-            ]
-          : []);
-      const found = options.find((p) => p.id === id) ?? null;
-      setForm((f) => ({ ...f, product: found }));
-    },
-    [productOptions, campaign.asin, campaign.imageUrl, campaign.productName]
-  );
   const asinForTracking = form.product?.asin ?? campaign.asin ?? null;
+
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const MIN_REVIEW_LEN = 40;
+  const canProceedFromReviewStep = useMemo(() => {
+    const hasMin = form.reviewText.trim().length >= MIN_REVIEW_LEN;
+    if (form.rating === 4 || form.rating === 5) {
+      return hasMin && form.hasOpenedExternal && form.countdownMs === 0;
+    }
+    return hasMin;
+  }, [form.reviewText, form.rating, form.hasOpenedExternal, form.countdownMs]);
+
+  // 🎉 Confetti hook instance
+  const fireConfetti = useConfetti();
+
   const handleCopyAndOpen = useCallback(async () => {
     if (!reviewUrl) return;
 
@@ -249,27 +338,20 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
     campaign.id,
     startCountdown,
   ]);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const MIN_REVIEW_LEN = 40;
-  const canProceedFromReviewStep = useMemo(() => {
-    const hasMin = form.reviewText.trim().length >= MIN_REVIEW_LEN;
-    if (form.rating === 4 || form.rating === 5) {
-      return hasMin && form.hasOpenedExternal && form.countdownMs === 0;
-    }
-    return hasMin;
-  }, [form.reviewText, form.rating, form.hasOpenedExternal, form.countdownMs]);
+
   const handleSubmit = useCallback(async () => {
-    const campaignId = campaign.id ?? form.product?.id; // <- use picked product’s campaign id on /r
+    const isSynthetic = !campaign.id || campaign.slug === "global";
+    const campaignId = isSynthetic ? form.product?.id : campaign.id;
+
     if (!campaignId) {
-      setSubmitError?.("Please pick a product first."); // optional guard
+      setSubmitError?.("Please pick a product first.");
       return;
     }
-    console.log("Submitting campaignId:", campaignId, "product:", form.product);
-    // Build the submission payload
+
     const payload = {
-      campaignId, // <-- use this
+      campaignId,
       campaignName: campaign.name,
-      productName: campaign.productName,
+      productName: form.product?.name ?? campaign.productName,
       marketplace: campaign.marketplace ?? {
         platform: "AMAZON",
         code: "UK",
@@ -281,119 +363,156 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
       orderNumber: form.orderNumber,
       email: form.email,
       marketingOptIn: form.marketingOptIn,
-    };
+    } as const;
+
     setSubmitError(null);
-    console.log("Submitting campaignId:", campaignId, "product:", form.product);
-    try {
-      const res = await fetch("/api/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        let msg = `Submit failed (${res.status})`;
-        try {
-          const j = await res.json();
-          if (j?.error) msg = j.error;
-        } catch {}
-        setSubmitError(msg); // show this near the button
-        return;
-      }
-      // Success → next
-      goNext();
-    } catch {
-      // Network error → surface if needed
+
+    const res = await fetch("/api/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      let msg = `Submit failed (${res.status})`;
+      try {
+        const j = await res.json();
+        if (j?.error) msg = j.error;
+      } catch {}
+      setSubmitError(msg);
+      return;
     }
+
+    // 🎉 Fire confetti and move to summary
+    fireConfetti({ anchor: cardAnchorRef.current, durationMs: 1800 });
+    goNext();
   }, [
     campaign.id,
+    campaign.slug,
     campaign.name,
     campaign.productName,
     campaign.marketplace,
     form,
+    fireConfetti,
     goNext,
   ]);
 
   // ----- Render current step -----
   return (
-    <Card className="max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>{campaign.productName} — Leave a Review</span>
-          <span className="text-sm font-normal">
-            {step + 1} / {stepsTotal}
-          </span>
-        </CardTitle>
-        <Progress value={progress} className="h-2" />
-      </CardHeader>
-
-      <CardContent className="space-y-6">
-        {step === 0 && (
-          <StepProductOrder
-            product={form.product ?? null}
-            productOptions={effectiveProductOptions} // <-- use fallback-backed options
-            orderNumber={form.orderNumber}
-            onSelectProduct={selectProductById}
-            onOrderNumberChange={setOrderNumber}
-            onNext={goNext}
+    <div className="w-full mx-auto max-w-screen-sm">
+      {/* Sticky top bar (mobile friendly) */}
+      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="text-sm font-semibold truncate">
+              {campaign.productName
+                ? `${campaign.productName} — Review`
+                : "Leave a Review"}
+            </h1>
+            <span className="text-xs text-muted-foreground">
+              {step + 1} / {stepsTotal}
+            </span>
+          </div>
+          <Progress
+            value={progress}
+            className="mt-2 h-2"
+            role="progressbar"
+            aria-valuenow={Math.round(progress)}
+            aria-valuemin={0}
+            aria-valuemax={100}
           />
-        )}
+        </div>
+      </div>
 
-        {/* Step 1: Usage + Rating (no copy/open here) */}
-        {step === 1 && (
-          <StepUsageRating
-            used7Days={form.used7Days}
-            rating={form.rating}
-            onUsed7DaysChange={setUsed7Days}
-            onRatingChange={setRating}
-            onBack={goBack}
-            onNext={goNext}
-          />
-        )}
+      {/* Main card */}
+      <div ref={cardAnchorRef}>
+        <Card className="mx-3 my-4 shadow-sm rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base sm:text-lg">
+              {campaign.productName
+                ? `${campaign.productName}`
+                : "Leave a Review"}
+            </CardTitle>
+            {/* Progress is now in the sticky bar; keep header slim */}
+          </CardHeader>
 
-        {/* Step 2: Write review (copy/open + countdown now here) */}
-        {step === 2 && (
-          <StepYourReview
-            rating={form.rating}
-            reviewText={form.reviewText}
-            onReviewTextChange={setReviewText}
-            reviewUrl={reviewUrl}
-            hasOpenedExternal={form.hasOpenedExternal}
-            countdownMs={form.countdownMs}
-            onCopyAndOpen={handleCopyAndOpen}
-            canProceed={canProceedFromReviewStep}
-            onBack={goBack}
-            onNext={goNext}
-          />
-        )}
-
-        {step === 3 && (
-          <>
-            <StepContactConsent
-              email={form.email ?? ""}
-              marketingOptIn={form.marketingOptIn}
-              onEmailChange={setEmail}
-              onMarketingOptInChange={setMarketingOptIn}
-              onBack={goBack}
-              onNext={handleSubmit}
-            />
-
-            {submitError && (
-              <p className="mt-2 text-sm text-red-600" role="alert">
-                {submitError}
-              </p>
+          <CardContent className="space-y-5 sm:space-y-6 px-3 sm:px-6">
+            {step === 0 && (
+              <StepProductOrder
+                product={form.product ?? null}
+                productOptions={effectiveProductOptions} // <-- use fallback-backed options
+                orderNumber={form.orderNumber}
+                onSelectProduct={selectProductById}
+                onOrderNumberChange={setOrderNumber}
+                onNext={goNext}
+              />
             )}
-          </>
-        )}
 
-        {step === 4 && (
-          <StepSummary
-            campaignName={campaign.name}
-            rating={form.rating}
-            reviewText={form.reviewText}
-            email={form.email ?? ""}
-          />
-        )}
-      </CardContent>
-    </Card>
+            {/* Step 1: Usage + Rating (no copy/open here) */}
+            {step === 1 && (
+              <StepUsageRating
+                used7Days={form.used7Days}
+                rating={form.rating}
+                onUsed7DaysChange={setUsed7Days}
+                onRatingChange={setRating}
+                onBack={goBack}
+                onNext={goNext}
+              />
+            )}
+
+            {/* Step 2: Write review (copy/open + countdown now here) */}
+            {step === 2 && (
+              <StepYourReview
+                rating={form.rating}
+                reviewText={form.reviewText}
+                onReviewTextChange={setReviewText}
+                reviewUrl={reviewUrl}
+                hasOpenedExternal={form.hasOpenedExternal}
+                countdownMs={form.countdownMs}
+                onCopyAndOpen={handleCopyAndOpen}
+                canProceed={canProceedFromReviewStep}
+                canCopyOpen={!!reviewUrl && !!form.reviewText}
+                onBack={goBack}
+                onNext={goNext}
+              />
+            )}
+
+            {step === 3 && (
+              <>
+                <StepContactConsent
+                  email={form.email ?? ""}
+                  marketingOptIn={form.marketingOptIn}
+                  onEmailChange={setEmail}
+                  onMarketingOptInChange={setMarketingOptIn}
+                  onBack={goBack}
+                  onNext={handleSubmit}
+                />
+
+                {submitError && (
+                  <p className="mt-2 text-sm text-red-600" role="alert">
+                    {submitError}
+                  </p>
+                )}
+              </>
+            )}
+
+            {step === 4 && (
+              <StepSummary
+                campaignName={campaign.name}
+                rating={form.rating}
+                reviewText={form.reviewText}
+                email={form.email ?? ""}
+              />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }
+
+/*
+Optional (globals.css):
+html { -webkit-tap-highlight-color: transparent; }
+body { padding-bottom: env(safe-area-inset-bottom); }
+*/

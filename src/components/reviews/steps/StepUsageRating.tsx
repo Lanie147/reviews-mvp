@@ -1,22 +1,48 @@
-// src/components/reviews/steps/StepUsageRating.tsx
 "use client";
-
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import StarRating from "@/components/reviews/StarRating";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Star } from "lucide-react";
+import clsx from "clsx";
 
-type Rating = 1 | 2 | 3 | 4 | 5;
+export type Rating = 1 | 2 | 3 | 4 | 5;
 
-type Props = {
-  used7Days: boolean;
-  rating: Rating | null;
-  onUsed7DaysChange: (value: boolean) => void;
-  onRatingChange: (value: Rating) => void;
-  onBack: () => void;
-  onNext: () => void;
-};
+function StarRating({
+  value,
+  onChange,
+}: {
+  value: Rating | null;
+  onChange: (v: Rating) => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2"
+      role="radiogroup"
+      aria-label="Rating"
+    >
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(n as Rating)}
+          aria-checked={value === n}
+          role="radio"
+          className={clsx(
+            "p-3 rounded-xl border transition min-w-12",
+            n <= (value ?? 0)
+              ? "bg-yellow-100 border-yellow-300"
+              : "bg-background"
+          )}
+        >
+          <Star
+            className={clsx("h-6 w-6", n <= (value ?? 0) ? "fill-current" : "")}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function StepUsageRating({
   used7Days,
@@ -25,60 +51,59 @@ export default function StepUsageRating({
   onRatingChange,
   onBack,
   onNext,
-}: Props) {
-  const [triedNext, setTriedNext] = React.useState(false);
-
-  const canProceed = Boolean(used7Days) && rating !== null;
-  const showUsedError = triedNext && !used7Days;
-  const showRatingError = triedNext && rating === null;
+}: {
+  used7Days: boolean;
+  rating: Rating | null;
+  onUsed7DaysChange: (v: boolean) => void;
+  onRatingChange: (v: Rating) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  // ✅ Require BOTH: checkbox ticked AND a rating selected
+  const canContinue = Boolean(used7Days && rating);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <div className="flex items-center gap-3">
-          <Checkbox
-            id="used7"
-            checked={used7Days}
-            onCheckedChange={(v) => onUsed7DaysChange(Boolean(v))}
-            aria-invalid={showUsedError}
-          />
-          <Label htmlFor="used7">
-            I’ve used the product for at least 5 days
-          </Label>
-        </div>
-        {showUsedError && (
-          <p className="text-xs text-destructive">
-            Please confirm you’ve used the product for at least 5 days.
-          </p>
-        )}
+    <div className="space-y-5">
+      <div className="flex items-start gap-3">
+        <Checkbox
+          id="used7"
+          checked={used7Days}
+          onCheckedChange={(v) => onUsed7DaysChange(Boolean(v))}
+          className="mt-1 h-5 w-5"
+        />
+        <Label htmlFor="used7" className="text-sm leading-snug">
+          I’ve used this product for at least 7 days
+        </Label>
       </div>
 
       <div className="space-y-2">
-        <Label>How would you rate the product?</Label>
-        <StarRating
-          value={rating ?? 0}
-          onChange={(v) => onRatingChange(v as Rating)}
-        />
-        {showRatingError && (
-          <p className="text-xs text-destructive">
-            Select a rating to continue.
-          </p>
-        )}
+        <Label className="text-sm">How many stars?</Label>
+        <StarRating value={rating} onChange={onRatingChange} />
       </div>
 
-      <div className="flex items-center justify-between pt-2">
-        <Button type="button" variant="ghost" onClick={onBack}>
+      {!canContinue && (
+        <p className="text-xs text-muted-foreground">
+          Select a rating and tick the 7-day box to continue.
+        </p>
+      )}
+
+      <div className="flex gap-3 pt-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-12 flex-1"
+          onClick={onBack}
+        >
           Back
         </Button>
         <Button
           type="button"
-          onClick={() => {
-            if (canProceed) onNext();
-            else setTriedNext(true);
-          }}
-          disabled={false /* we let them click to show errors */}
+          className="h-12 flex-[2]"
+          disabled={!canContinue}
+          aria-disabled={!canContinue}
+          onClick={onNext}
         >
-          Next
+          Continue
         </Button>
       </div>
     </div>

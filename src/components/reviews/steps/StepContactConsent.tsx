@@ -1,19 +1,9 @@
 "use client";
-
 import React from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-
-type Props = {
-  email: string;
-  marketingOptIn: boolean;
-  onEmailChange: (value: string) => void;
-  onMarketingOptInChange: (value: boolean) => void;
-  onBack: () => void;
-  onNext: () => void | Promise<void>;
-};
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function StepContactConsent({
   email,
@@ -22,44 +12,57 @@ export default function StepContactConsent({
   onMarketingOptInChange,
   onBack,
   onNext,
-}: Props) {
-  const canSubmit =
-    email.trim().length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
+}: {
+  email: string;
+  marketingOptIn: boolean;
+  onEmailChange: (v: string) => void;
+  onMarketingOptInChange: (v: boolean) => void;
+  onBack: () => void;
+  onNext: () => void; // parent triggers handleSubmit
+}) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="email">Email (optional)</Label>
+        <Label htmlFor="email" className="text-sm">
+          Email (to send your gift)
+        </Label>
         <Input
           id="email"
           type="email"
-          placeholder="you@example.com"
+          autoComplete="email"
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
-          autoComplete="email"
+          className="h-12 text-base"
+          placeholder="you@example.com"
         />
-        <p className="text-xs text-muted-foreground">
-          We’ll send your gift / support updates here. Leave blank if you
-          prefer.
-        </p>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3">
         <Checkbox
           id="optin"
           checked={marketingOptIn}
           onCheckedChange={(v) => onMarketingOptInChange(Boolean(v))}
+          className="mt-1 h-5 w-5"
         />
-        <Label htmlFor="optin">
-          I agree to receive occasional product updates and offers.
+        <Label
+          htmlFor="optin"
+          className="text-sm leading-snug text-muted-foreground"
+        >
+          Keep me in the loop about product tips and updates. You can
+          unsubscribe anytime.
         </Label>
       </div>
 
-      <div className="flex items-center justify-between pt-2">
-        <Button type="button" variant="ghost" onClick={onBack}>
+      <div className="flex gap-3 pt-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-12 flex-1"
+          onClick={onBack}
+        >
           Back
         </Button>
-        <Button type="button" onClick={onNext} disabled={!canSubmit}>
+        <Button type="button" className="h-12 flex-[2]" onClick={onNext}>
           Submit
         </Button>
       </div>
