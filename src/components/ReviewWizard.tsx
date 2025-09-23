@@ -249,7 +249,7 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
     campaign.id,
     startCountdown,
   ]);
-
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const MIN_REVIEW_LEN = 40;
   const canProceedFromReviewStep = useMemo(() => {
     const hasMin = form.reviewText.trim().length >= MIN_REVIEW_LEN;
@@ -259,20 +259,25 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
     return hasMin;
   }, [form.reviewText, form.rating, form.hasOpenedExternal, form.countdownMs]);
   const handleSubmit = useCallback(async () => {
+    const campaignId = campaign.id ?? form.product?.id; // <- use picked product’s campaign id on /r
     // Build the submission payload
     const payload = {
-      campaignId: campaign.id,
+      campaignId, // <-- use this
       campaignName: campaign.name,
       productName: campaign.productName,
-      marketplace: campaign.marketplace ?? null,
+      marketplace: campaign.marketplace ?? {
+        platform: "AMAZON",
+        code: "UK",
+        tld: "co.uk",
+      },
       rating: form.rating,
       used7Days: form.used7Days,
       reviewText: form.reviewText,
       orderNumber: form.orderNumber,
       email: form.email,
       marketingOptIn: form.marketingOptIn,
-      // targetId: undefined, target: undefined
-    } as const;
+    };
+    setSubmitError(null);
 
     try {
       const res = await fetch("/api/submit", {
@@ -281,7 +286,12 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        // You can surface a toast or inline error here
+        let msg = `Submit failed (${res.status})`;
+        try {
+          const j = await res.json();
+          if (j?.error) msg = j.error;
+        } catch {}
+        setSubmitError(msg); // show this near the button
         return;
       }
       // Success → next
@@ -352,14 +362,22 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
         )}
 
         {step === 3 && (
-          <StepContactConsent
-            email={form.email ?? ""}
-            marketingOptIn={form.marketingOptIn}
-            onEmailChange={setEmail}
-            onMarketingOptInChange={setMarketingOptIn}
-            onBack={goBack}
-            onNext={handleSubmit}
-          />
+          <>
+            <StepContactConsent
+              email={form.email ?? ""}
+              marketingOptIn={form.marketingOptIn}
+              onEmailChange={setEmail}
+              onMarketingOptInChange={setMarketingOptIn}
+              onBack={goBack}
+              onNext={handleSubmit}
+            />
+
+            {submitError && (
+              <p className="mt-2 text-sm text-red-600" role="alert">
+                {submitError}
+              </p>
+            )}
+          </>
         )}
 
         {step === 4 && (

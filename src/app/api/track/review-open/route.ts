@@ -60,3 +60,34 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const asin = searchParams.get("asin");
+  if (!asin) {
+    return NextResponse.json(
+      { ok: false, error: "asin required" },
+      { status: 400 }
+    );
+  }
+
+  // optional extras
+  const productName = searchParams.get("productName");
+  const campaignId = searchParams.get("campaignId");
+
+  const ipHash = crypto
+    .createHash("sha256")
+    .update(
+      `${req.headers.get("x-forwarded-for") ?? ""}|${
+        req.headers.get("user-agent") ?? ""
+      }`
+    )
+    .digest("hex");
+
+  await prisma.reviewOpenEvent.create({
+    data: { asin, productName, campaignId, ipHash },
+  });
+
+  // 1x1 gif response (pixel) or just 204
+  return new Response(null, { status: 204 });
+}

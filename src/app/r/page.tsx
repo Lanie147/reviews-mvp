@@ -11,7 +11,13 @@ export default async function GenericLanding() {
   // Pull ASINs from ACTIVE (non-archived) campaigns only
   const rows = await prisma.campaign.findMany({
     where: { status: { not: "ARCHIVED" } },
-    select: { asin: true, productName: true, imageUrl: true, createdAt: true },
+    select: {
+      id: true,
+      asin: true,
+      productName: true,
+      imageUrl: true,
+      createdAt: true,
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -30,7 +36,14 @@ export default async function GenericLanding() {
     }
   }
 
-  const productOptions = Array.from(byAsin.values());
+  const productOptions: ProductOption[] = rows
+    .filter((r) => r.asin) // only keep rows with a real ASIN
+    .map((r) => ({
+      id: r.id, // real campaign id
+      name: r.productName ?? "(Unnamed)", // <-- add this
+      asin: r.asin!, // safe because of the filter
+      imageUrl: r.imageUrl ?? null,
+    }));
 
   // Minimal "virtual" campaign for the wizard (Amazon-only flow)
   const campaign: CampaignProps = {
