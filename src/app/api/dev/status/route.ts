@@ -1,17 +1,17 @@
 // src/app/api/dev/status/route.ts
 export const runtime = "nodejs";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
     const url = process.env.DATABASE_URL || "";
     const host = url.split("@")[1]?.split("/")[0] || "";
     const counts = {
-      marketplaces: await db.marketplace.count(),
-      campaigns: await db.campaign.count(),
-      targets: await db.reviewTarget.count(),
-      links: await db.shortLink.count(),
+      marketplaces: await prisma.marketplace.count(),
+      campaigns: await prisma.campaign.count(),
+      targets: await prisma.reviewTarget.count(),
+      links: await prisma.shortLink.count(),
     };
     return NextResponse.json({
       ok: true,

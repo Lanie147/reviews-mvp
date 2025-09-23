@@ -1,13 +1,17 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")  // migrate/db pull
 }
 
+/**
+ * === Enums (already exist in DB) ===
+ */
 enum Platform {
   AMAZON
   EBAY
@@ -16,98 +20,118 @@ enum Platform {
   CUSTOM
 }
 
+/**
+ * === Tables mapped to your current DB ===
+ */
+
+model Campaign {
+  id            String   @id @default(cuid())
+  name          String
+  productName   String
+  asin          String // NOT NULL in DB
+  imageUrl      String // NOT NULL in DB
+  slug          String   @unique
+  status        String   @default("active") // DB default is 'active'
+  marketplaceId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+
+  // Relations
+  marketplace       Marketplace?       @relation(fields: [marketplaceId], references: [id])
+  reviewTargets     ReviewTarget[]
+  reviewSubmissions ReviewSubmission[]
+  shortLinks        ShortLink[]
+  reviewOpenEvents  ReviewOpenEvent[] // NEW back-relation
+
+  @@index([asin])
+}
+
+model Marketplace {
+  id         String   @id @default(cuid())
+  platform   Platform
+  code       String
+  tld        String?
+  externalId String?
+  createdAt  DateTime @default(now())
+
+  campaigns Campaign[]
+}
+
+model ReviewTarget {
+  id         String   @id @default(cuid())
+  campaignId String
+  platform   Platform
+  asin       String?
+  itemId     String?
+  placeId    String?
+  url        String?
+  isPrimary  Boolean  @default(false)
+  title      String
+  image      String?
+  createdAt  DateTime @default(now())
+
+  campaign    Campaign           @relation(fields: [campaignId], references: [id])
+  submissions ReviewSubmission[]
+}
+
 model ReviewSubmission {
-  id             String   @id @default(cuid())
-  createdAt      DateTime @default(now())
-  campaignId     String
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+
   campaignName   String
   marketplace    Json
   rating         Int
   used7Days      Boolean
   reviewText     String
   orderNumber    String
-  email          String?  @db.VarChar(320)
-  marketingOptIn Boolean  @default(false)
+  email          String?
+  marketingOptIn Boolean @default(false)
   productName    String
-  selectedTarget ReviewTarget? @relation("SubmissionTarget", fields: [targetId], references: [id])
-  targetId       String?
-  target         Json?
 
-  @@unique([campaignId, orderNumber], name: "campaignId_orderNumber")
-}
+  // FK relation to ReviewTarget (optional)
+  targetId String?
+  target   ReviewTarget? @relation(fields: [targetId], references: [id])
 
-model FeedbackSubmission {
-  id         String   @id @default(cuid())
-  campaignId String
-  campaign   Campaign @relation("CampaignSubmissions", fields: [campaignId], references: [id], onDelete: Cascade)
+  // JSON snapshot column named `target` in the DB
+  targetSnapshot Json? @map("target")
 
-  product     String?
-  marketplace String? // e.g. "UK", "US" or a label
-  orderNumber String?
-  rating      Int? // 1..5
-  used7Days   Boolean?
-  name        String?
-  email       String?
-  phone       String?
-  optIn       Boolean? // marketing opt-in
-
-  reviewText String?
-  createdAt  DateTime @default(now())
-}
-
-model Marketplace {
-  id         String     @id @default(cuid())
-  platform   Platform
-  code       String // "UK","US","DE"...
-  tld        String? // "co.uk","com","de" (Amazon/eBay)
-  externalId String? // sellerId / placeId / shop domain etc
-  createdAt  DateTime   @default(now())
-  campaigns  Campaign[]
-}
-
-model Campaign {
-  id            String               @id @default(cuid())
-  name          String
-  slug          String               @unique
-  status        String               @default("active")
-  marketplaceId String
-  marketplace   Marketplace          @relation(fields: [marketplaceId], references: [id])
-  targets       ReviewTarget[]
-  shortLinks    ShortLink[]
-  submissions   FeedbackSubmission[] @relation("CampaignSubmissions")
-  createdAt     DateTime             @default(now())
-}
-
-model ReviewTarget {
-  id           String             @id @default(cuid())
-  campaignId   String
-  campaign     Campaign          @relation(fields: [campaignId], references: [id])
-  platform     Platform
-  asin         String?           // Amazon
-  itemId       String?           // eBay
-  placeId      String?           // Google
-  url          String?           // Shopify/custom fallback
-  isPrimary    Boolean           @default(false)
-  title        String            // Product title
-  image        String?           // Product image URL
-  createdAt    DateTime          @default(now())
-  submissions  ReviewSubmission[] @relation("SubmissionTarget")
+  @@unique([campaignId, orderNumber])
 }
 
 model ShortLink {
-  id         String      @id @default(cuid())
+  id         String   @id @default(cuid())
   campaignId String
+  slug       String   @unique
+  createdAt  DateTime @default(now())
+
   campaign   Campaign    @relation(fields: [campaignId], references: [id])
-  slug       String      @unique
-  createdAt  DateTime    @default(now())
-  scans      ScanEvent[]
+  scanEvents ScanEvent[]
 }
 
 model ScanEvent {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   shortLinkId String
-  shortLink   ShortLink @relation(fields: [shortLinkId], references: [id])
   userAgent   String?
   ipHash      String?
+  createdAt   DateTime @default(now())
+
+  shortLink ShortLink @relation(fields: [shortLinkId], references: [id])
+}
+
+/**
+ * === NEW: clicks on “Copy & open review page” ===
+ */
+model ReviewOpenEvent {
+  id          String    @id @default(cuid())
   createdAt   DateTime  @default(now())
+  asin        String
+  productName String?
+  campaignId  String?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  userAgent   String?
+  ipHash      String?
+
+  @@index([asin, createdAt])
 }

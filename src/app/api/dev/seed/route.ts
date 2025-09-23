@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Platform, Prisma } from "@prisma/client";
 
-// Optional: disable this route in production
 export async function GET() {
   if (process.env.NODE_ENV !== "development") {
     return NextResponse.json(
@@ -19,31 +18,44 @@ export async function GET() {
     create: {
       id: "mkt-amazon-uk",
       platform: Platform.AMAZON,
-      code: "UK",
+      code: "UK", // keep your current code schema
       tld: "co.uk",
       externalId: "SELLER_ID_OPTIONAL",
     },
   });
 
-  // 2) Campaign (idempotent; assumes unique slug)
+  // 2) Campaign (idempotent; now includes required fields)
+  // NOTE: ASIN must be 10 chars
+  const seedAsin = "B0ABCDE123"; // 10 characters
+
   const campaign = await prisma.campaign.upsert({
     where: { slug: "amz-uk-sept" },
-    update: {},
+    update: {
+      // keep idempotent but allow updates if you tweak seed data later
+      name: "Amazon UK – Sept",
+      productName: "Example Product",
+      asin: seedAsin.toUpperCase(),
+      imageUrl: "https://via.placeholder.com/600x600.png?text=Example+Product",
+      marketplace: { connect: { id: marketplace.id } },
+    },
     create: {
       id: "camp-amz-uk-sept",
       name: "Amazon UK – Sept",
+      productName: "Example Product",
+      asin: seedAsin.toUpperCase(),
+      imageUrl: "https://via.placeholder.com/600x600.png?text=Example+Product",
       slug: "amz-uk-sept",
-      marketplace: { connect: { id: marketplace.id } },
+      marketplace: { connect: { id: marketplace.id } }, // required relation
     },
   });
 
-  // 3) Review target (idempotent) — NOTE: title is REQUIRED by your schema
+  // 3) Review target (idempotent) — title required by your schema
   const targetCreate: Prisma.ReviewTargetCreateInput = {
     id: "seed-target",
-    title: "Amazon Product B0XXXXXXX", // ✅ required
-    image: "https://images-na.ssl-images-amazon.com/images/P/B0XXXXXXX.jpg", // optional if your model allows
-    platform: Platform.AMAZON, // ✅ enum, not string
-    asin: "B0XXXXXXX",
+    title: "Amazon Product " + seedAsin, // required
+    image: "https://via.placeholder.com/1200x1200.png?text=Review+Target",
+    platform: Platform.AMAZON,
+    asin: seedAsin,
     isPrimary: true,
     campaign: { connect: { id: campaign.id } },
   };
@@ -54,7 +66,7 @@ export async function GET() {
     create: targetCreate,
   });
 
-  // 4) Short link (idempotent; assumes unique slug)
+  // 4) Short link (idempotent; unique slug)
   await prisma.shortLink.upsert({
     where: { slug: "amz-sept-1" },
     update: { campaignId: campaign.id },

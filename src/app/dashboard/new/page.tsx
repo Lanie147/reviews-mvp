@@ -1,175 +1,146 @@
-// src/app/dashboard/new/page.tsx
-export const runtime = "nodejs";
+"use client";
 
-import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
-import { z } from "zod";
-import Link from "next/link";
+import { useTransition, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  campaignCreateSchema,
+  type CampaignCreate,
+} from "@/lib/validation/campaign";
+import { createCampaign } from "./actions";
 
-// ---- helpers ----
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-+/g, "-");
-}
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import Image from "next/image";
 
-const FormSchema = z.object({
-  name: z.string().min(2, "Name is required"),
-  campaignSlug: z
-    .string()
-    .regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers, and dashes only")
-    .min(3)
-    .max(48),
-  asin: z.string().regex(/^[A-Z0-9]{10}$/, "ASIN must be 10 chars (A–Z, 0–9)"),
-  shortSlug: z
-    .string()
-    .regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers, and dashes only")
-    .min(3)
-    .max(48),
-});
+export default function NewCampaignPage() {
+  const [pending, startTransition] = useTransition();
+  const [preview, setPreview] = useState<string | null>(null);
 
-// ensure we have an Amazon UK marketplace
-async function ensureAmazonUkMarketplace() {
-  const existing = await db.marketplace.findFirst({
-    where: { platform: "AMAZON", code: "UK", tld: "co.uk" },
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isValid },
+    watch,
+  } = useForm<CampaignCreate>({
+    resolver: zodResolver(campaignCreateSchema),
+    mode: "onChange",
+    defaultValues: { name: "", productName: "", asin: "", imageUrl: "" },
   });
-  if (existing) return existing;
-  return db.marketplace.create({
-    data: { platform: "AMAZON", code: "UK", tld: "co.uk" },
-  });
-}
 
-export default async function NewCampaignPage() {
-  // Server Action
-  async function createCampaignAction(formData: FormData) {
-    "use server";
+  const productName = watch("productName");
+  const imageUrl = watch("imageUrl");
 
-    const name = String(formData.get("name") || "").trim();
-    const campaignSlug = slugify(String(formData.get("campaignSlug") || ""));
-    const shortSlug = slugify(String(formData.get("shortSlug") || ""));
-    const asinInput = String(formData.get("asin") || "");
-    const asinMatch = asinInput.toUpperCase().match(/[A-Z0-9]{10}/);
-    const asin = asinMatch ? asinMatch[0] : "";
-
-    const parsed = FormSchema.safeParse({
-      name,
-      campaignSlug,
-      asin,
-      shortSlug,
-    });
-    if (!parsed.success) {
-      const err = parsed.error.flatten().fieldErrors;
-      const messages = Object.entries(err).flatMap(([k, v]) =>
-        v && v.length ? [`${k}: ${v.join(", ")}`] : []
-      );
-      throw new Error(messages.join(" | ") || "Invalid input");
-    }
-
-    // unique short slug
-    const exists = await db.shortLink.findUnique({
-      where: { slug: shortSlug },
-    });
-    if (exists)
-      throw new Error(`Short link slug "${shortSlug}" is already taken`);
-
-    const mkt = await ensureAmazonUkMarketplace();
-
-    const campaign = await db.campaign.create({
-      data: {
-        name,
-        slug: campaignSlug,
-        marketplace: { connect: { id: mkt.id } },
-      },
-    });
-
-    await db.reviewTarget.create({
-      data: {
-        campaign: { connect: { id: campaign.id } },
-        platform: "AMAZON",
-        asin,
-        isPrimary: true,
-        title: name, // Using the campaign name as the review target title
-      },
-    });
-
-    await db.shortLink.create({
-      data: { campaign: { connect: { id: campaign.id } }, slug: shortSlug },
-    });
-
-    redirect("/dashboard");
-  }
+  // Prepare preview values safely
+  const previewSrc = preview && preview.trim() !== "" ? preview.trim() : null;
+  const alt =
+    (productName && `${productName} image preview`) || "Campaign image preview";
 
   return (
-    <main className="mx-auto max-w-xl p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Create Campaign</h1>
-        <Link href="/dashboard" className="text-sm text-blue-600 underline">
-          Back to dashboard
-        </Link>
-      </div>
+    <main className="mx-auto max-w-3xl px-4 py-8">
+      <Card>
+        <CardHeader>
+          <CardTitle>Create campaign</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={handleSubmit((values) => {
+              const fd = new FormData();
+              fd.set("name", values.name);
+              fd.set("productName", values.productName);
+              fd.set("asin", values.asin);
+              fd.set("imageUrl", values.imageUrl);
 
-      <form action={createCampaignAction} className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium">Name</label>
-          <input
-            name="name"
-            required
-            placeholder="Amazon UK – Autumn"
-            className="mt-1 w-full rounded-lg border px-3 py-2"
-          />
-        </div>
+              startTransition(async () => {
+                const res = await createCampaign(fd);
+                if (res.ok) window.location.href = "/dashboard";
+              });
+            })}
+            className="space-y-5"
+          >
+            <div className="grid gap-2">
+              <Label htmlFor="productName">Product name</Label>
+              <Input id="productName" {...register("productName")} />
+              {errors.productName && (
+                <p className="text-xs text-destructive">
+                  {errors.productName.message}
+                </p>
+              )}
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium">Campaign slug</label>
-          <input
-            name="campaignSlug"
-            required
-            placeholder="amz-uk-autumn"
-            pattern="^[a-z0-9-]+$"
-            className="mt-1 w-full rounded-lg border px-3 py-2"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Lowercase, numbers, dashes.
-          </p>
-        </div>
+            <div className="grid gap-2">
+              <Label htmlFor="asin">ASIN</Label>
+              <Input
+                id="asin"
+                maxLength={10}
+                className="uppercase"
+                {...register("asin")}
+              />
+              {errors.asin && (
+                <p className="text-xs text-destructive">
+                  {errors.asin.message}
+                </p>
+              )}
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium">Amazon ASIN</label>
-          <input
-            name="asin"
-            required
-            placeholder="B0ABCDEFGH"
-            className="mt-1 w-full rounded-lg border px-3 py-2 uppercase"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            10 characters, letters/numbers.
-          </p>
-        </div>
+            <div className="grid gap-2">
+              <Label htmlFor="name">Campaign name</Label>
+              <Input
+                id="name"
+                placeholder="e.g. Q4 Push"
+                {...register("name")}
+              />
+              {errors.name && (
+                <p className="text-xs text-destructive">
+                  {errors.name.message}
+                </p>
+              )}
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium">Short link slug</label>
-          <input
-            name="shortSlug"
-            required
-            placeholder="amz-autumn-1"
-            pattern="^[a-z0-9-]+$"
-            className="mt-1 w-full rounded-lg border px-3 py-2"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            This becomes <code>/c/&lt;slug&gt;</code> and the QR target.
-          </p>
-        </div>
+            <div className="grid gap-2">
+              <Label htmlFor="imageUrl">Link to image</Label>
+              <Input
+                id="imageUrl"
+                placeholder="https://…"
+                {...register("imageUrl")}
+                onBlur={() => setPreview(imageUrl?.trim() || null)}
+              />
+              {errors.imageUrl && (
+                <p className="text-xs text-destructive">
+                  {errors.imageUrl.message}
+                </p>
+              )}
 
-        <button
-          type="submit"
-          className="rounded-lg bg-black px-4 py-2 text-white"
-        >
-          Create
-        </button>
-      </form>
+              {previewSrc && (
+                <div className="relative mt-2 h-24 w-24 overflow-hidden rounded-md">
+                  <Image
+                    src={previewSrc}
+                    alt={alt}
+                    width={96}
+                    height={96}
+                    className="h-24 w-24 rounded-md object-cover"
+                    priority
+                    // Remove `unoptimized` after adding remotePatterns in next.config.js for your image host(s)
+                    // unoptimized
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <Button
+                type="submit"
+                disabled={!isValid || pending}
+                className="w-full"
+              >
+                {pending ? "Creating…" : "Create campaign"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </main>
   );
 }

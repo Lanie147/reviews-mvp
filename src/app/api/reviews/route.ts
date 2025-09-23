@@ -13,12 +13,14 @@ export async function POST(req: Request) {
         path: i.path.join("."),
         message: i.message,
       }));
+      console.error(parsed.error);
       return NextResponse.json({ ok: false, errors: issues }, { status: 422 });
     }
 
     const data = parsed.data;
 
     // Ensure campaign exists (tweak to your model)
+    console.log("Received campaignId:", data.campaignId);
     const campaign = await prisma.campaign.findUnique({
       where: { id: data.campaignId },
       select: { id: true },
@@ -59,7 +61,21 @@ export async function POST(req: Request) {
     }
 
     // Save
-    const created = await prisma.reviewSubmission.create({ data });
+    const created = await prisma.reviewSubmission.create({
+      data: {
+        campaignId: data.campaignId,
+        campaignName: data.campaignName,
+        marketplace: data.marketplace, // JSON field
+        productName: data.productName,
+        orderNumber: data.orderNumber,
+        used7Days: data.used7Days,
+        rating: data.rating,
+        reviewText: data.reviewText,
+        email: data.email || undefined,
+        marketingOptIn: data.marketingOptIn,
+        targetSnapshot: data.selectedProduct ?? undefined,
+      },
+    });
     return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
   } catch (err) {
     console.error(err);

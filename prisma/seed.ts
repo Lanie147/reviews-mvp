@@ -22,9 +22,13 @@ async function main() {
     where: { slug: "amz-uk-sept" }, // assumes slug is unique
     update: {},
     create: {
-      id: "camp-amz-uk-sept",
-      name: "Amazon UK – Sept",
-      slug: "amz-uk-sept",
+      id: "...",
+      name: "...",
+      slug: "...",
+      productName: "Example Product",
+      asin: "B0XXXXXXX",
+      imageUrl:
+        "https://images-na.ssl-images-amazon.com/images/P/B0XXXXXXX.jpg",
       marketplace: { connect: { id: marketplace.id } },
     },
   });
