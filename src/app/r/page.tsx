@@ -12,7 +12,7 @@ export default async function GenericLanding() {
   const rows = await prisma.campaign.findMany({
     where: { status: { not: "ARCHIVED" } },
     select: {
-      id: true,
+      id: true, // 👈 include the real campaign id
       asin: true,
       productName: true,
       imageUrl: true,
@@ -21,35 +21,23 @@ export default async function GenericLanding() {
     orderBy: { createdAt: "desc" },
   });
 
-  // Build de-duped product options keyed by ASIN, ignore empty
-  const byAsin = new Map<string, ProductOption>();
-  for (const r of rows) {
-    const asin = (r.asin ?? "").trim();
-    if (!asin) continue;
-    if (!byAsin.has(asin)) {
-      byAsin.set(asin, {
-        id: asin,
-        name: asin, // we render only ASIN in the Select
-        asin,
-        imageUrl: r.imageUrl ?? null,
-      });
-    }
-  }
-
+  // Build options for the product picker.
+  // IMPORTANT: id here is the REAL campaign id (used on submit).
   const productOptions: ProductOption[] = rows
-    .filter((r) => r.asin) // only keep rows with a real ASIN
+    .filter((r) => r.asin) // only keep campaigns that have an ASIN
     .map((r) => ({
-      id: r.id, // real campaign id
-      name: r.productName ?? "(Unnamed)", // <-- add this
-      asin: r.asin!, // safe because of the filter
+      id: r.id, // 👈 real campaign id
+      name: r.productName ?? "(Unnamed)", // 👈 ProductOption requires 'name'
+      asin: r.asin!, // safe because of filter above
       imageUrl: r.imageUrl ?? null,
     }));
 
-  // Minimal "virtual" campaign for the wizard (Amazon-only flow)
+  // Synthetic campaign object for rendering the wizard at /r
+  // (Submit will use campaign.id ?? form.product?.id, so this can omit an id)
   const campaign: CampaignProps = {
-    id: "campaign-global",
-    name: "Review Gift",
-    productName: "Select a product",
+    id: "global",
+    name: "Leave a Review",
+    productName: "Choose your product",
     asin: null,
     imageUrl: null,
     slug: "global",

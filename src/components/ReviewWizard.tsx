@@ -260,6 +260,11 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
   }, [form.reviewText, form.rating, form.hasOpenedExternal, form.countdownMs]);
   const handleSubmit = useCallback(async () => {
     const campaignId = campaign.id ?? form.product?.id; // <- use picked product’s campaign id on /r
+    if (!campaignId) {
+      setSubmitError?.("Please pick a product first."); // optional guard
+      return;
+    }
+    console.log("Submitting campaignId:", campaignId, "product:", form.product);
     // Build the submission payload
     const payload = {
       campaignId, // <-- use this
@@ -278,7 +283,7 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
       marketingOptIn: form.marketingOptIn,
     };
     setSubmitError(null);
-
+    console.log("Submitting campaignId:", campaignId, "product:", form.product);
     try {
       const res = await fetch("/api/submit", {
         method: "POST",
