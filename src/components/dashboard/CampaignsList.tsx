@@ -1,7 +1,6 @@
 // src/components/dashboard/CampaignsList.tsx
 "use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
 export default function CampaignsList() {
   return (
     <Card>

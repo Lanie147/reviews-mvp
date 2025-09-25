@@ -405,9 +405,11 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
         <div className="px-4 pt-3 pb-2">
           <div className="flex items-center justify-between gap-2">
             <h1 className="text-sm font-semibold truncate">
-              {campaign.productName
-                ? `${campaign.productName} — Review`
-                : "Leave a Review"}
+              {`${
+                form.product?.name ??
+                campaign.productName ??
+                "Choose your product"
+              } - Review`}
             </h1>
             <span className="text-xs text-muted-foreground">
               {step + 1} / {stepsTotal}
@@ -429,9 +431,9 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
         <Card className="mx-3 my-4 shadow-sm rounded-xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-base sm:text-lg">
-              {campaign.productName
-                ? `${campaign.productName}`
-                : "Leave a Review"}
+              {form.product?.name ??
+                campaign.productName ??
+                "Choose your product"}
             </CardTitle>
             {/* Progress is now in the sticky bar; keep header slim */}
           </CardHeader>

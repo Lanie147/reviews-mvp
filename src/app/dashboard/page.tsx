@@ -4,13 +4,14 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import Image from "next/image";
+import CampaignCard from "@/components/dashboard/CampaignCard";
+
 import QRCode from "react-qr-code";
 import { headers } from "next/headers";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+
 import { CopyButton } from "@/components/CopyButton";
 import { archiveCampaign, unarchiveCampaign, deleteCampaign } from "./actions";
 import DashboardTabs from "@/components/dashboard/DashboardTabs";
@@ -32,14 +33,13 @@ function k(n: number) {
 }
 
 export default async function Dashboard() {
-  // One query for campaigns, plus direct counts for clicks & scans
   const [campaigns, reviewClicks, totalScans] = await Promise.all([
     prisma.campaign.findMany({
-      include: { marketplace: true }, // we only need marketplace here
+      include: { marketplace: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.reviewOpenEvent.count(), // "Copy & open review page" clicks
-    prisma.scanEvent.count(), // QR short-link scans (e.g., /c/global)
+    prisma.reviewOpenEvent.count(),
+    prisma.scanEvent.count(),
   ]);
 
   const totals = {
@@ -48,7 +48,7 @@ export default async function Dashboard() {
     reviewClicks,
   };
 
-  // Status is uppercase in DB: 'ACTIVE' | 'ARCHIVED'
+  // DB uses uppercase enum: 'ACTIVE' | 'ARCHIVED'
   const active = campaigns.filter((c) => c.status !== "ARCHIVED");
   const archived = campaigns.filter((c) => c.status === "ARCHIVED");
 
@@ -58,18 +58,16 @@ export default async function Dashboard() {
   const proto = hdrs.get("x-forwarded-proto") ?? "https";
   const resolvedBase =
     process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ||
-    "" ||
     (host ? `${proto}://${host}` : "");
 
-  // Point the universal QR at your short link for scan tracking
   const globalLandingUrl = resolvedBase ? `${resolvedBase}/r` : "/r";
 
   return (
     <main className="mx-auto max-w-6xl p-6 bg-background text-foreground">
-      <h1 className="text-3xl font-semibold tracking-tight mb-4">Dashboard</h1>
+      <h1 className="mb-4 text-3xl font-semibold tracking-tight">Dashboard</h1>
 
-      {/* Global stats live ABOVE the tabs (apply to the whole dashboard) */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
+      {/* Global stats */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">
@@ -80,7 +78,6 @@ export default async function Dashboard() {
             {totals.campaigns}
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">
@@ -91,7 +88,6 @@ export default async function Dashboard() {
             {k(totals.reviewClicks)}
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">
@@ -104,8 +100,8 @@ export default async function Dashboard() {
         </Card>
       </div>
 
-      {/* Tabs: Campaigns (your existing UI) + Reviews (filterable table) */}
       <DashboardTabs
+        defaultTab="campaigns"
         renderCampaigns={
           <>
             {/* CSS-only modal for the global QR */}
@@ -124,7 +120,6 @@ export default async function Dashboard() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {/* One universal QR for all campaigns */}
                 <Button variant="outline" asChild>
                   <a href="#global-qr">Show global QR</a>
                 </Button>
@@ -134,7 +129,7 @@ export default async function Dashboard() {
               </div>
             </div>
 
-            {/* Global QR modal (stays within the Campaigns tab) */}
+            {/* Global QR modal */}
             <div
               id="global-qr"
               className="qr-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -196,169 +191,119 @@ export default async function Dashboard() {
               <>
                 <h3 className="mt-4 text-lg font-semibold">Active campaigns</h3>
                 <div className="mt-3 grid grid-cols-1 gap-6 md:grid-cols-2">
-                  {active.map((c) => {
-                    const productImg =
-                      c.imageUrl ||
-                      (c.asin
-                        ? `https://images-eu.ssl-images-amazon.com/images/P/${c.asin}.jpg`
-                        : null);
-
-                    return (
-                      <Card key={c.id} className="transition hover:shadow-md">
-                        <CardHeader className="flex-row items-start justify-between space-y-0 gap-4">
-                          <div className="min-w-0">
-                            <CardTitle className="truncate">{c.name}</CardTitle>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                              <Badge variant="secondary">
-                                {c.marketplace?.platform ?? "—"}{" "}
-                                {c.marketplace?.code}
-                              </Badge>
-                              <span className="text-gray-300">•</span>
-                              <code className="rounded-md bg-muted px-1.5 py-0.5">
-                                /r/{c.slug}
-                              </code>
-                            </div>
-                          </div>
-
-                          <div className="flex items-start gap-3">
-                            {productImg && (
-                              <Image
-                                src={productImg}
-                                alt={`${c.productName} image`}
-                                width={112}
-                                height={112}
-                                className="h-28 w-28 rounded-md object-cover"
-                                priority
-                              />
-                            )}
-
-                            <div className="flex flex-col items-end gap-2">
-                              <Button variant="outline" asChild>
-                                <Link href="/r">Open landing</Link>
-                              </Button>
-
-                              {/* Archive button */}
-                              <form action={archiveCampaign}>
-                                <input type="hidden" name="id" value={c.id} />
-                                <Button variant="destructive" type="submit">
-                                  Archive
-                                </Button>
-                              </form>
-                            </div>
-                          </div>
-                        </CardHeader>
-
-                        <Separator />
-                      </Card>
-                    );
-                  })}
+                  {active.map((c) => (
+                    <CampaignCard
+                      key={c.id}
+                      id={c.id}
+                      name={c.name}
+                      productName={c.productName}
+                      asin={c.asin ?? undefined}
+                      imageUrl={c.imageUrl ?? undefined}
+                      slug={c.slug!}
+                      marketplaceLabel={`${c.marketplace?.platform ?? "—"} ${
+                        c.marketplace?.code ?? ""
+                      }`}
+                      status={c.status as "ACTIVE" | "ARCHIVED"}
+                      actions={
+                        <form action={archiveCampaign}>
+                          <input type="hidden" name="id" value={c.id} />
+                          <Button
+                            className="cursor-pointer"
+                            variant="destructive"
+                            type="submit"
+                          >
+                            Archive
+                          </Button>
+                        </form>
+                      }
+                    />
+                  ))}
                 </div>
               </>
             )}
-
-            {/* Archived campaigns */}
+          </>
+        }
+        renderArchived={
+          <>
             {!!archived.length && (
               <>
-                <h3 className="mt-8 text-lg font-semibold">
+                <h3 className="mt-4 text-lg font-semibold">
                   Archived campaigns
                 </h3>
                 <div className="mt-3 grid grid-cols-1 gap-6 md:grid-cols-2">
-                  {archived.map((c) => {
-                    const productImg =
-                      c.imageUrl ||
-                      (c.asin
-                        ? `https://images-na.ssl-images-amazon.com/images/P/${c.asin}.jpg`
-                        : null);
+                  {archived.map((c) => (
+                    <CampaignCard
+                      key={c.id}
+                      id={c.id}
+                      name={c.name}
+                      productName={c.productName}
+                      asin={c.asin ?? undefined}
+                      imageUrl={c.imageUrl ?? undefined}
+                      slug={c.slug!}
+                      marketplaceLabel={`${c.marketplace?.platform ?? "—"} ${
+                        c.marketplace?.code ?? ""
+                      }`}
+                      status="ARCHIVED"
+                      actions={
+                        <>
+                          <form action={unarchiveCampaign}>
+                            <input type="hidden" name="id" value={c.id} />
+                            <Button
+                              className="cursor-pointer"
+                              variant="secondary"
+                              type="submit"
+                            >
+                              Restore
+                            </Button>
+                          </form>
 
-                    return (
-                      <Card key={c.id} className="opacity-95">
-                        <CardHeader className="flex-row items-start justify-between space-y-0 gap-4">
-                          <div className="min-w-0">
-                            <CardTitle className="truncate">{c.name}</CardTitle>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                              <Badge variant="outline">ARCHIVED</Badge>
-                              <span className="text-gray-300">•</span>
-                              <code className="rounded-md bg-muted px-1.5 py-0.5">
-                                /r/{c.slug}
-                              </code>
-                            </div>
-                          </div>
-
-                          <div className="flex items-start gap-3">
-                            {productImg && (
-                              <Image
-                                src={productImg}
-                                alt={`${c.productName} image`}
-                                width={112}
-                                height={112}
-                                className="h-28 w-28 rounded-md object-cover"
-                                priority
-                              />
-                            )}
-
-                            <div className="flex flex-col items-end gap-2">
-                              {/* Restore button */}
-                              <form action={unarchiveCampaign}>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                className="cursor-pointer"
+                                variant="destructive"
+                                size="sm"
+                              >
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Delete this campaign permanently?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This cannot be undone. The campaign and all
+                                  related data will be removed for good.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <form action={deleteCampaign}>
                                 <input type="hidden" name="id" value={c.id} />
-                                <Button variant="secondary" type="submit">
-                                  Restore
-                                </Button>
-                              </form>
-
-                              {/* Permanent Delete button with confirmation */}
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="destructive" size="sm">
-                                    Delete
+                                <label className="block text-sm mb-1">
+                                  Type <b>DELETE</b> to confirm
+                                </label>
+                                <input
+                                  name="confirm"
+                                  required
+                                  pattern="DELETE"
+                                  title='Type "DELETE"'
+                                  className="w-full border rounded px-2 py-1 mb-4"
+                                />
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel type="button">
+                                    Cancel
+                                  </AlertDialogCancel>
+                                  <Button type="submit" variant="destructive">
+                                    Permanently delete
                                   </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Delete this campaign permanently?
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This cannot be undone. The campaign and
-                                      all related data (submissions, clicks,
-                                      scans) will be removed for good.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <form action={deleteCampaign}>
-                                    <input
-                                      type="hidden"
-                                      name="id"
-                                      value={c.id}
-                                    />
-                                    <label className="block text-sm mb-1">
-                                      Type <b>DELETE</b> to confirm
-                                    </label>
-                                    <input
-                                      name="confirm"
-                                      required
-                                      pattern="DELETE"
-                                      title='Type "DELETE"'
-                                      className="w-full border rounded px-2 py-1 mb-4"
-                                    />
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel type="button">
-                                        Cancel
-                                      </AlertDialogCancel>
-                                      <Button
-                                        type="submit"
-                                        variant="destructive"
-                                      >
-                                        Permanently delete
-                                      </Button>
-                                    </AlertDialogFooter>
-                                  </form>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </div>
-                        </CardHeader>
-                      </Card>
-                    );
-                  })}
+                                </AlertDialogFooter>
+                              </form>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </>
+                      }
+                    />
+                  ))}
                 </div>
               </>
             )}

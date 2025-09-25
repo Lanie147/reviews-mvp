@@ -1,37 +1,51 @@
+// src/components/dashboard/DashboardTabs.tsx
 "use client";
 
-import React from "react";
+import * as React from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ReviewsTable from "@/components/dashboard/ReviewsTable";
 
-// NOTE: We assume you already have a Campaigns list on your Dashboard.
-// Wrap it in a component you can render here (or inline your current Campaigns UI).
-// To keep this drop-in, we expose a slot via `renderCampaigns`.
+type Props = {
+  renderCampaigns: React.ReactNode;
+  renderArchived?: React.ReactNode;
+  renderReviews?: React.ReactNode;
+  defaultTab?: "campaigns" | "archived" | "reviews";
+  className?: string;
+};
 
 export default function DashboardTabs({
   renderCampaigns,
-}: {
-  renderCampaigns: React.ReactNode;
-}) {
+  renderArchived,
+  renderReviews,
+  defaultTab = "campaigns",
+  className,
+}: Props) {
   return (
-    <Tabs defaultValue="campaigns" className="w-full">
+    <Tabs defaultValue={defaultTab} className={className ?? "w-full"}>
       <TabsList className="mb-4">
         <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
+        {renderArchived && <TabsTrigger value="archived">Archived</TabsTrigger>}
         <TabsTrigger value="reviews">Reviews</TabsTrigger>
       </TabsList>
 
       <TabsContent value="campaigns">{renderCampaigns}</TabsContent>
 
+      {renderArchived && (
+        <TabsContent value="archived">{renderArchived}</TabsContent>
+      )}
+
       <TabsContent value="reviews">
-        <Card>
-          <CardHeader>
-            <CardTitle>All Reviews</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ReviewsTable />
-          </CardContent>
-        </Card>
+        {renderReviews ?? (
+          <Card>
+            <CardHeader>
+              <CardTitle>All Reviews</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ReviewsTable />
+            </CardContent>
+          </Card>
+        )}
       </TabsContent>
     </Tabs>
   );
