@@ -12,8 +12,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CopyButton } from "@/components/CopyButton";
-import { archiveCampaign, unarchiveCampaign } from "./actions";
+import { archiveCampaign, unarchiveCampaign, deleteCampaign } from "./actions";
 import DashboardTabs from "@/components/dashboard/DashboardTabs";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 
 function k(n: number) {
   if (n < 1000) return String(n);
@@ -38,9 +48,9 @@ export default async function Dashboard() {
     reviewClicks,
   };
 
-  // Status is lowercase in DB: 'active' | 'archived'
-  const active = campaigns.filter((c) => c.status !== "archived");
-  const archived = campaigns.filter((c) => c.status === "archived");
+  // Status is uppercase in DB: 'ACTIVE' | 'ARCHIVED'
+  const active = campaigns.filter((c) => c.status !== "ARCHIVED");
+  const archived = campaigns.filter((c) => c.status === "ARCHIVED");
 
   // Absolute base URL for QR target
   const hdrs = await headers();
@@ -52,9 +62,7 @@ export default async function Dashboard() {
     (host ? `${proto}://${host}` : "");
 
   // Point the universal QR at your short link for scan tracking
-  const globalLandingUrl = resolvedBase
-    ? `${resolvedBase}/c/global`
-    : "/c/global";
+  const globalLandingUrl = resolvedBase ? `${resolvedBase}/r` : "/r";
 
   return (
     <main className="mx-auto max-w-6xl p-6 bg-background text-foreground">
@@ -192,7 +200,7 @@ export default async function Dashboard() {
                     const productImg =
                       c.imageUrl ||
                       (c.asin
-                        ? `https://images-na.ssl-images-amazon.com/images/P/${c.asin}.jpg`
+                        ? `https://images-eu.ssl-images-amazon.com/images/P/${c.asin}.jpg`
                         : null);
 
                     return (
@@ -296,6 +304,55 @@ export default async function Dashboard() {
                                   Restore
                                 </Button>
                               </form>
+
+                              {/* Permanent Delete button with confirmation */}
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="destructive" size="sm">
+                                    Delete
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Delete this campaign permanently?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This cannot be undone. The campaign and
+                                      all related data (submissions, clicks,
+                                      scans) will be removed for good.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <form action={deleteCampaign}>
+                                    <input
+                                      type="hidden"
+                                      name="id"
+                                      value={c.id}
+                                    />
+                                    <label className="block text-sm mb-1">
+                                      Type <b>DELETE</b> to confirm
+                                    </label>
+                                    <input
+                                      name="confirm"
+                                      required
+                                      pattern="DELETE"
+                                      title='Type "DELETE"'
+                                      className="w-full border rounded px-2 py-1 mb-4"
+                                    />
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel type="button">
+                                        Cancel
+                                      </AlertDialogCancel>
+                                      <Button
+                                        type="submit"
+                                        variant="destructive"
+                                      >
+                                        Permanently delete
+                                      </Button>
+                                    </AlertDialogFooter>
+                                  </form>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
                           </div>
                         </CardHeader>

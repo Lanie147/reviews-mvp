@@ -5,8 +5,8 @@ import { AppHeader } from "@/components/AppHeader";
 import HideOnLanding from "@/components/HideOnLanding";
 
 export const metadata = {
-  title: "Reviews MVP",
-  description: "QR → short link → review page",
+  title: "JRT PRODUCTS",
+  description: "Amazon Reviews Collection Tool",
 };
 
 export default function RootLayout({

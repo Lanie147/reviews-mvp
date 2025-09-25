@@ -9,6 +9,34 @@ function getId(fd: FormData) {
   if (!id) throw new Error("Missing campaign id");
   return id;
 }
+export async function deleteCampaign(fd: FormData): Promise<void> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const id = getId(fd);
+  const confirm = String(fd.get("confirm") ?? "");
+  if (confirm !== "DELETE") throw new Error('Type "DELETE" to confirm');
+
+  const current = await prisma.campaign.findUnique({
+    where: { id },
+    select: { status: true, slug: true },
+  });
+  if (!current) throw new Error("Campaign not found");
+  if (current.status !== "ARCHIVED") {
+    throw new Error("Archive the campaign first before deleting permanently.");
+  }
+
+  // If your relations are not ON DELETE CASCADE, delete children first
+  await prisma.$transaction([
+    prisma.reviewSubmission.deleteMany({ where: { campaignId: id } }),
+    prisma.campaign.delete({ where: { id } }),
+  ]);
+
+  // Revalidate dashboard + review routes that could reference this campaign
+  revalidatePath("/dashboard");
+  revalidatePath("/r");
+  if (current.slug) revalidatePath(`/r/${current.slug}`);
+}
 
 async function revalidateAll(slug?: string | null) {
   revalidatePath("/dashboard");
