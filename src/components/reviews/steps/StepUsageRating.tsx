@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Star } from "lucide-react";
-import clsx from "clsx";
 
 export type Rating = 1 | 2 | 3 | 4 | 5;
 
@@ -15,31 +14,37 @@ function StarRating({
   value: Rating | null;
   onChange: (v: Rating) => void;
 }) {
+  const stars: Rating[] = [1, 2, 3, 4, 5];
+
   return (
     <div
       className="flex items-center gap-2"
       role="radiogroup"
       aria-label="Rating"
     >
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n as Rating)}
-          aria-checked={value === n}
-          role="radio"
-          className={clsx(
-            "p-3 rounded-xl border transition min-w-12",
-            n <= (value ?? 0)
-              ? "bg-yellow-100 border-yellow-300"
-              : "bg-background"
-          )}
-        >
-          <Star
-            className={clsx("h-6 w-6", n <= (value ?? 0) ? "fill-current" : "")}
-          />
-        </button>
-      ))}
+      {stars.map((n) => {
+        const filled = (value ?? 0) >= n;
+        return (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={value === n}
+            onClick={() => onChange(n)}
+            className="p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+          >
+            <Star
+              className={`h-8 w-8 transition-transform ${
+                filled ? "text-yellow-400" : "text-muted-foreground/60"
+              }`}
+              // solid gold when selected; outline gray when not
+              fill={filled ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth={1.5}
+            />
+          </button>
+        );
+      })}
     </div>
   );
 }

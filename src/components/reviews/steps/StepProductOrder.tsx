@@ -1,5 +1,7 @@
+// src/components/review/StepProductOrder.tsx
 "use client";
 import React from "react";
+import Image from "next/image";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import Image from "next/image";
 
 export type ProductOption = {
   id: string; // campaign id in your effective list
@@ -37,71 +38,109 @@ export default function StepProductOrder({
   const canContinue =
     !!product && /^\d{3}-\d{7}-\d{7}$/.test(orderNumber.trim());
 
+  // Prefer explicit imageUrl, else fall back to Amazon CDN by ASIN
+  const previewSrc = product
+    ? product.imageUrl?.trim() ||
+      (product.asin
+        ? `https://images-eu.ssl-images-amazon.com/images/P/${product.asin}.jpg`
+        : "")
+    : "";
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (canContinue) onNext();
+  }
+
   return (
-    <div className="space-y-4">
-      {/* Product picker */}
-      <div className="space-y-2">
-        <Label htmlFor="product" className="text-sm">
-          Product
-        </Label>
-        <div className="flex items-center gap-3">
-          {product?.imageUrl ? (
-            <div className="shrink-0">
-              <Image
-                src={product.imageUrl}
-                alt={product.name}
-                width={64}
-                height={64}
-                className="rounded-lg object-cover aspect-square"
-              />
+    <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+      {/* When a product is selected, switch to a 2-col layout with a larger preview */}
+      <div
+        className={
+          product
+            ? "grid grid-cols-[auto,1fr] items-start gap-4 sm:gap-6"
+            : "grid grid-cols-1 gap-4 sm:gap-6"
+        }
+      >
+        {/* Large product preview — only after selection */}
+        {product && (
+          <div className="row-span-2">
+            <div className="relative h-28 w-28 sm:h-36 sm:w-36 overflow-hidden rounded-xl border bg-muted">
+              {previewSrc ? (
+                <Image
+                  src={previewSrc}
+                  alt={`${product.name} image`}
+                  fill
+                  sizes="144px"
+                  className="object-cover"
+                  priority
+                />
+              ) : (
+                <div className="h-full w-full" />
+              )}
             </div>
-          ) : null}
-          <Select
-            defaultValue={product?.id}
-            onValueChange={(v) => onSelectProduct(v)}
-          >
-            <SelectTrigger id="product" className="h-12 text-base">
-              <SelectValue placeholder="Select product" />
-            </SelectTrigger>
-            <SelectContent>
-              {productOptions.map((p) => (
-                <SelectItem key={p.id} value={p.id} className="py-3 text-base">
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          </div>
+        )}
+
+        {/* Product select */}
+        <div className={product ? "" : "sm:max-w-md"}>
+          <Label htmlFor="product" className="text-sm">
+            Product
+          </Label>
+          <div className="mt-1">
+            <Select value={product?.id ?? ""} onValueChange={onSelectProduct}>
+              <SelectTrigger id="product" className="h-12 text-base w-full">
+                <SelectValue placeholder="Select product" />
+              </SelectTrigger>
+              <SelectContent>
+                {productOptions.map((p) => (
+                  <SelectItem
+                    key={p.id}
+                    value={p.id}
+                    className="py-3 text-base"
+                  >
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Order number */}
+        <div className={product ? "" : "sm:max-w-md"}>
+          <Label htmlFor="orderNumber" className="text-sm">
+            Amazon order number
+          </Label>
+          <Input
+            id="orderNumber"
+            inputMode="numeric"
+            placeholder="123-1234567-1234567"
+            className="h-12 text-base mt-1"
+            value={orderNumber}
+            onChange={(e) => onOrderNumberChange(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Find it in your Amazon order email/receipts.
+          </p>
         </div>
       </div>
 
-      {/* Order number */}
-      <div className="space-y-2">
-        <Label htmlFor="orderNumber" className="text-sm">
-          Amazon order number
-        </Label>
-        <Input
-          id="orderNumber"
-          inputMode="numeric"
-          placeholder="123-1234567-1234567"
-          className="h-12 text-base"
-          value={orderNumber}
-          onChange={(e) => onOrderNumberChange(e.target.value)}
-        />
-        <p className="text-xs text-muted-foreground">
-          Find it in your Amazon order email/receipts.
-        </p>
-      </div>
-
-      <div className="pt-2">
+      {/* Continue */}
+      <div className="pt-1">
         <Button
-          type="button"
-          className="h-12 w-full"
+          type="submit"
+          className="h-12 w-full sm:w-auto sm:min-w-[200px]"
           disabled={!canContinue}
-          onClick={onNext}
+          aria-disabled={!canContinue}
         >
           Continue
         </Button>
+        {!canContinue && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Select a product and enter your order number to continue.
+          </p>
+        )}
       </div>
-    </div>
+    </form>
   );
 }
