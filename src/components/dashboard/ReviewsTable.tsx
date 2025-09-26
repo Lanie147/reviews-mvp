@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import ExportReviewsButton from "./ExportReviewsButton";
 
 // ---------------- Types ----------------
 export type ReviewRow = {
@@ -242,6 +243,9 @@ export default function ReviewsTable() {
             Next
           </Button>
         </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <ExportReviewsButton />
       </div>
     </div>
   );
