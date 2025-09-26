@@ -9,7 +9,7 @@ const buttonVariants = cva(
     "transition-colors duration-200 " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] " +
     "focus-visible:ring-offset-2 ring-offset-[hsl(var(--background))] " +
-    "disabled:pointer-events-none disabled:opacity-50",
+    "disabled:pointer-events-none cursor-pointer disabled:opacity-50",
   {
     variants: {
       variant: {

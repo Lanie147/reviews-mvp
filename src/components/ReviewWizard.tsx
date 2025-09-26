@@ -307,16 +307,18 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
   const handleCopyAndOpen = useCallback(async () => {
     if (!reviewUrl) return;
 
+    // Copy review text (best-effort)
     try {
       await navigator.clipboard.writeText(form.reviewText || "");
     } catch {
       // ignore clipboard errors
     }
 
+    // update UI state + start your countdown (unchanged)
     setForm((f) => ({ ...f, hasOpenedExternal: true }));
-    startCountdown(10_000); // your existing 10s countdown
+    startCountdown(10_000); // keep your existing duration
 
-    // Fire-and-forget tracking (no await so UX stays snappy)
+    // Fire-and-forget tracking (unchanged)
     if (asinForTracking) {
       void fetch("/api/track/review-open", {
         method: "POST",
@@ -329,7 +331,18 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
       }).catch(() => {});
     }
 
-    window.open(reviewUrl, "_blank", "noopener,noreferrer");
+    // 🚫 No window.open on mobile — causes about:blank
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(
+      navigator.userAgent || ""
+    );
+
+    if (isMobile) {
+      // Top-level navigation so iOS/Android hand off to the Amazon app
+      window.location.href = reviewUrl; // or window.location.assign(reviewUrl)
+    } else {
+      // Desktop: new tab is fine
+      window.open(reviewUrl, "_blank", "noopener,noreferrer");
+    }
   }, [
     reviewUrl,
     form.reviewText,
@@ -337,6 +350,7 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
     campaign.productName,
     campaign.id,
     startCountdown,
+    setForm,
   ]);
 
   const handleSubmit = useCallback(async () => {
@@ -409,7 +423,7 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
                 form.product?.name ??
                 campaign.productName ??
                 "Choose your product"
-              } - Review`}
+              } - Complete for your reward`}
             </h1>
             <span className="text-xs text-muted-foreground">
               {step + 1} / {stepsTotal}
@@ -431,9 +445,9 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
         <Card className="mx-3 my-4 shadow-sm rounded-xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-base sm:text-lg">
-              {form.product?.name ??
-                campaign.productName ??
-                "Choose your product"}
+              {step > 0
+                ? form.product?.name ?? campaign.productName ?? "Leave a Review"
+                : campaign.productName || "Choose your product"}
             </CardTitle>
             {/* Progress is now in the sticky bar; keep header slim */}
           </CardHeader>
@@ -473,7 +487,7 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
                 countdownMs={form.countdownMs}
                 onCopyAndOpen={handleCopyAndOpen}
                 canProceed={canProceedFromReviewStep}
-                canCopyOpen={!!reviewUrl && !!form.reviewText}
+                canCopyOpen={!!reviewUrl && form.reviewText.trim().length >= 40}
                 onBack={goBack}
                 onNext={goNext}
               />
@@ -512,9 +526,3 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
     </div>
   );
 }
-
-/*
-Optional (globals.css):
-html { -webkit-tap-highlight-color: transparent; }
-body { padding-bottom: env(safe-area-inset-bottom); }
-*/

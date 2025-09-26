@@ -54,7 +54,7 @@ export default function StepYourReview({
             (rating >= 4 ? (
               <span>Copy then post on Amazon</span>
             ) : (
-              <span>We’ll handle the rest here</span>
+              <span></span>
             ))}
         </div>
       </div>
