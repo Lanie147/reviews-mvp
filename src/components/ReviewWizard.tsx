@@ -422,7 +422,7 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
               {`${
                 form.product?.name ??
                 campaign.productName ??
-                "Choose your product"
+                "What did you buy?"
               } - Complete for your reward`}
             </h1>
             <span className="text-xs text-muted-foreground">
