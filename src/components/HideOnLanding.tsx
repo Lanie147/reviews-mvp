@@ -7,6 +7,6 @@ import { useSelectedLayoutSegments } from "next/navigation";
 export default function HideOnLanding({ children }: PropsWithChildren) {
   const segments = useSelectedLayoutSegments();
   const first = segments[0] ?? "";
-  if (first === "r") return null;
+  if (first !== "dashboard") return null;
   return <>{children}</>;
 }

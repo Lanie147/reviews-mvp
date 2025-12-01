@@ -5,5 +5,5 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default function LandingSlugRedirect() {
-  redirect("/r");
+  redirect("/review");
 }
