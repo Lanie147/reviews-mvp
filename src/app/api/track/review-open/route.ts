@@ -76,7 +76,7 @@ export async function GET(req: Request) {
     .digest("hex");
 
   await prisma.reviewOpenEvent.create({
-    data: { asin, productName, campaignId, ipHash },
+    data: { asin, productName, campaignId, ipHash, id: crypto.randomUUID() },
   });
 
   // 1x1 gif response (pixel) or just 204
