@@ -289,8 +289,6 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
     setForm((f) => ({ ...f, marketingOptIn: value }));
   }, []);
 
-  const asinForTracking = form.product?.asin ?? campaign.asin ?? null;
-
   const [submitError, setSubmitError] = useState<string | null>(null);
   const MIN_REVIEW_LEN = 40;
   const canProceedFromReviewStep = useMemo(() => {
@@ -318,19 +316,6 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
     setForm((f) => ({ ...f, hasOpenedExternal: true }));
     startCountdown(10_000); // keep your existing duration
 
-    // Fire-and-forget tracking (unchanged)
-    if (asinForTracking) {
-      void fetch("/api/track/review-open", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          asin: asinForTracking,
-          productName: campaign.productName ?? null,
-          campaignId: campaign.id ?? null,
-        }),
-      }).catch(() => {});
-    }
-
     // 🚫 No window.open on mobile — causes about:blank
     const isMobile = /iPhone|iPad|iPod|Android/i.test(
       navigator.userAgent || ""
@@ -346,7 +331,6 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
   }, [
     reviewUrl,
     form.reviewText,
-    asinForTracking,
     campaign.productName,
     campaign.id,
     startCountdown,
@@ -446,8 +430,8 @@ export default function ReviewWizard({ campaign, productOptions }: Props) {
           <CardHeader className="pb-2">
             <CardTitle className="text-base sm:text-lg">
               {step > 0
-                ? form.product?.name ?? campaign.productName ?? "Leave a Review"
-                : campaign.productName || "Choose your product"}
+                ? form.product?.name ?? "Leave a Review"
+                : form.product?.name || "Tell us what you purchased"}
             </CardTitle>
             {/* Progress is now in the sticky bar; keep header slim */}
           </CardHeader>

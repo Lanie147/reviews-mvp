@@ -2,51 +2,61 @@
 "use client";
 
 import * as React from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import ReviewsTable from "@/components/dashboard/ReviewsTable";
+import { useState } from "react";
 
 type Props = {
+  defaultTab?: "campaigns" | "products" | "archived";
   renderCampaigns: React.ReactNode;
+  renderProducts?: React.ReactNode;
   renderArchived?: React.ReactNode;
-  renderReviews?: React.ReactNode;
-  defaultTab?: "campaigns" | "archived" | "reviews";
   className?: string;
 };
 
 export default function DashboardTabs({
-  renderCampaigns,
-  renderArchived,
-  renderReviews,
   defaultTab = "campaigns",
+  renderCampaigns,
+  renderProducts,
+  renderArchived,
   className,
 }: Props) {
+  const [active, setActive] = useState(defaultTab);
+
+  function TabButton({
+    id,
+    children,
+  }: {
+    id: "campaigns" | "products" | "archived";
+    children: React.ReactNode;
+  }) {
+    const isActive = active === id;
+    return (
+      <button
+        type="button"
+        onClick={() => setActive(id)}
+        className={`px-3 py-2 rounded-md text-sm font-medium transition ${
+          isActive ? "bg-white/6 text-white" : "text-muted-foreground hover:bg-white/2"
+        }`}
+        aria-pressed={isActive}
+        aria-current={isActive ? "true" : undefined}
+      >
+        {children}
+      </button>
+    );
+  }
+
   return (
-    <Tabs defaultValue={defaultTab} className={className ?? "w-full"}>
-      <TabsList className="mb-4">
-        <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
-        {renderArchived && <TabsTrigger value="archived">Archived</TabsTrigger>}
-        <TabsTrigger value="reviews">Reviews</TabsTrigger>
-      </TabsList>
+    <div className={`space-y-4 ${className ?? "w-full"}`}>
+      <nav className="flex items-center gap-2" role="tablist" aria-label="Dashboard tabs">
+        <TabButton id="campaigns">Campaigns</TabButton>
+        <TabButton id="products">Products</TabButton>
+        <TabButton id="archived">Archived</TabButton>
+      </nav>
 
-      <TabsContent value="campaigns">{renderCampaigns}</TabsContent>
-
-      {renderArchived && (
-        <TabsContent value="archived">{renderArchived}</TabsContent>
-      )}
-
-      <TabsContent value="reviews">
-        {renderReviews ?? (
-          <Card>
-            <CardHeader>
-              <CardTitle>All Reviews</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ReviewsTable />
-            </CardContent>
-          </Card>
-        )}
-      </TabsContent>
-    </Tabs>
+      <div>
+        {active === "campaigns" && <div role="tabpanel">{renderCampaigns}</div>}
+        {active === "products" && <div role="tabpanel">{renderProducts ?? <div className="text-sm text-muted-foreground">No products tab provided.</div>}</div>}
+        {active === "archived" && <div role="tabpanel">{renderArchived}</div>}
+      </div>
+    </div>
   );
 }

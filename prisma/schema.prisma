@@ -1,18 +1,14 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_DATABASE_URL")  // migrate/db pull
+  provider  = "postgresql"
+  url       = env("DIRECT_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-/**
- * === Enums (already exist in DB) ===
- */
-enum Platform {
+enum platform {
   AMAZON
   EBAY
   GOOGLE
@@ -20,118 +16,149 @@ enum Platform {
   CUSTOM
 }
 
-/**
- * === Tables mapped to your current DB ===
- */
-
-model Campaign {
-  id            String   @id @default(cuid())
-  name          String
-  productName   String
-  asin          String // NOT NULL in DB
-  imageUrl      String // NOT NULL in DB
-  slug          String   @unique
-  status        String   @default("active") // DB default is 'active'
-  marketplaceId String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now())
-
-  // Relations
-  marketplace       Marketplace?       @relation(fields: [marketplaceId], references: [id])
-  reviewTargets     ReviewTarget[]
-  reviewSubmissions ReviewSubmission[]
-  shortLinks        ShortLink[]
-  reviewOpenEvents  ReviewOpenEvent[] // NEW back-relation
-
-  @@index([asin])
-}
-
 model Marketplace {
-  id         String   @id @default(cuid())
-  platform   Platform
+  id         String   @id
+  platform   platform
   code       String
   tld        String?
-  externalId String?
-  createdAt  DateTime @default(now())
+  externalId String?  @map("externalid")
+  createdAt  DateTime @default(now()) @map("createdat") @db.Timestamptz(6)
 
-  campaigns Campaign[]
+  campaign        Campaign[]
+  product         Product[]
+  reviewOpenEvent ReviewOpenEvent[]
+
+  @@index([code], map: "marketplace_code_idx")
+  @@map("Marketplace")
 }
 
-model ReviewTarget {
-  id         String   @id @default(cuid())
-  campaignId String
-  platform   Platform
-  asin       String?
-  itemId     String?
-  placeId    String?
-  url        String?
-  isPrimary  Boolean  @default(false)
-  title      String
-  image      String?
-  createdAt  DateTime @default(now())
+model Campaign {
+  id            String   @id
+  name          String
+  productName   String   @map("productname")
+  asin          String   @map("asin") @db.VarChar
+  imageUrl      String   @map("imageurl")
+  slug          String   @unique @map("slug")
+  status        String   @default("active") @map("status")
+  marketplaceId String?  @map("marketplaceid")
+  createdAt     DateTime @default(now()) @map("createdat") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updatedat") @db.Timestamptz(6)
 
-  campaign    Campaign           @relation(fields: [campaignId], references: [id])
-  submissions ReviewSubmission[]
+  marketplace       Marketplace?       @relation(fields: [marketplaceId], references: [id], map: "campaign_marketplaceid_fkey", onDelete: NoAction, onUpdate: NoAction)
+  products          Product[]
+  reviewOpenEvents  ReviewOpenEvent[]
+  reviewSubmissions ReviewSubmission[]
+  shortLinks        ShortLink[]
+  reviewTargets     ReviewTarget[]
+
+  @@index([asin], map: "campaign_asin_idx")
+  @@index([slug], map: "campaign_slug_idx")
+  @@map("Campaign")
 }
 
-model ReviewSubmission {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now())
-  campaignId String
-  campaign   Campaign @relation(fields: [campaignId], references: [id])
+model Product {
+  id            String   @id
+  externalId    String?  @map("externalid")
+  sku           String?  @map("sku")
+  title         String?  @map("title")
+  url           String?  @map("url")
+  imageUrl      String?  @map("imageurl")
+  price         Float?   @map("price")
+  metadata      Json?    @map("metadata")
+  marketplaceId String?  @map("marketplaceid")
+  campaignId    String?  @map("campaignid")
+  createdAt     DateTime @default(now()) @map("createdat") @db.Timestamptz(6)
 
-  campaignName   String
-  marketplace    Json
-  rating         Int
-  used7Days      Boolean
-  reviewText     String
-  orderNumber    String
-  email          String?
-  marketingOptIn Boolean @default(false)
-  productName    String
+  campaign    Campaign?    @relation(fields: [campaignId], references: [id], map: "product_campaignid_fkey", onDelete: SetNull)
+  marketplace Marketplace? @relation(fields: [marketplaceId], references: [id], map: "product_marketplaceid_fkey", onDelete: SetNull)
 
-  // FK relation to ReviewTarget (optional)
-  targetId String?
-  target   ReviewTarget? @relation(fields: [targetId], references: [id])
-
-  // JSON snapshot column named `target` in the DB
-  targetSnapshot Json? @map("target")
-
-  @@unique([campaignId, orderNumber])
+  @@unique([externalId, marketplaceId], map: "product_external_marketplace_unique")
+  @@index([campaignId], map: "product_campaign_idx")
+  @@index([externalId, marketplaceId], map: "product_external_marketplace_idx")
+  @@map("Product")
 }
 
 model ShortLink {
-  id         String   @id @default(cuid())
-  campaignId String
-  slug       String   @unique
-  createdAt  DateTime @default(now())
+  id         String   @id
+  campaignId String   @map("campaignid")
+  slug       String   @unique @map("slug")
+  createdAt  DateTime @default(now()) @map("createdat") @db.Timestamptz(6)
 
-  campaign   Campaign    @relation(fields: [campaignId], references: [id])
+  campaign   Campaign    @relation(fields: [campaignId], references: [id], map: "shortlink_campaignid_fkey")
   scanEvents ScanEvent[]
+
+  @@map("ShortLink")
 }
 
 model ScanEvent {
-  id          String   @id @default(cuid())
-  shortLinkId String
-  userAgent   String?
-  ipHash      String?
-  createdAt   DateTime @default(now())
+  id          String   @id
+  shortLinkId String   @map("shortlinkid")
+  userAgent   String?  @map("useragent")
+  ipHash      String?  @map("iphash")
+  createdAt   DateTime @default(now()) @map("createdat") @db.Timestamptz(6)
 
-  shortLink ShortLink @relation(fields: [shortLinkId], references: [id])
+  shortLink ShortLink @relation(fields: [shortLinkId], references: [id], map: "scanevent_shortlinkid_fkey")
+
+  @@map("ScanEvent")
 }
 
-/**
- * === NEW: clicks on “Copy & open review page” ===
- */
-model ReviewOpenEvent {
-  id          String    @id @default(cuid())
-  createdAt   DateTime  @default(now())
-  asin        String
-  productName String?
-  campaignId  String?
-  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  userAgent   String?
-  ipHash      String?
+model ReviewTarget {
+  id         String   @id
+  campaignId String   @map("campaignid")
+  platform   platform @map("platform")
+  asin       String?  @map("asin")
+  itemId     String?  @map("itemid")
+  placeId    String?  @map("placeid")
+  url        String?  @map("url")
+  isPrimary  Boolean  @default(false) @map("isprimary")
+  title      String   @map("title")
+  image      String?  @map("image")
+  createdAt  DateTime @default(now()) @map("createdat") @db.Timestamptz(6)
 
-  @@index([asin, createdAt])
+  campaign         Campaign           @relation(fields: [campaignId], references: [id], map: "reviewtarget_campaignid_fkey")
+  ReviewSubmission ReviewSubmission[]
+
+  @@index([campaignId], map: "reviewtarget_campaign_idx")
+  @@map("ReviewTarget")
+}
+
+model ReviewSubmission {
+  id             String   @id
+  createdAt      DateTime @default(now()) @map("createdat") @db.Timestamptz(6)
+  campaignId     String   @map("campaignid")
+  campaignName   String   @map("campaignname")
+  marketplace    Json     @map("marketplace")
+  rating         Int      @map("rating")
+  used7Days      Boolean  @map("used7days")
+  reviewText     String   @map("reviewtext")
+  orderNumber    String   @map("ordernumber")
+  email          String?  @map("email")
+  marketingOptIn Boolean  @default(false) @map("marketingoptin")
+  productName    String   @map("productname")
+  targetId       String?  @map("targetid")
+  target         Json?    @map("target")
+
+  campaign  Campaign      @relation(fields: [campaignId], references: [id], map: "reviewsubmission_campaignid_fkey")
+  targetRef ReviewTarget? @relation(fields: [targetId], references: [id], map: "reviewsubmission_targetid_fkey")
+
+  @@index([campaignId], map: "reviewsubmission_campaign_idx")
+  @@map("ReviewSubmission")
+}
+
+model ReviewOpenEvent {
+  id            String   @id
+  createdAt     DateTime @default(now()) @map("createdat") @db.Timestamptz(6)
+  asin          String?  @map("asin")
+  externalId    String?  @map("externalid")
+  productName   String?  @map("productname")
+  campaignId    String?  @map("campaignid")
+  marketplaceId String?  @map("marketplaceid")
+  userAgent     String?  @map("useragent")
+  ipHash        String?  @map("iphash")
+
+  campaign    Campaign?    @relation(fields: [campaignId], references: [id], map: "reviewopenevent_campaignid_fkey", onDelete: SetNull)
+  marketplace Marketplace? @relation(fields: [marketplaceId], references: [id], map: "reviewopenevent_marketplaceid_fkey", onDelete: SetNull)
+
+  @@index([externalId, marketplaceId, createdAt], map: "reviewopenevent_external_marketplace_createdat_idx")
+  @@map("ReviewOpenEvent")
 }

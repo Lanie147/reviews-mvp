@@ -40,16 +40,6 @@ export async function POST(req: Request) {
     const crypto = await import("crypto");
     const ipHash = crypto.createHash("sha256").update(String(ip)).digest("hex");
 
-    await prisma.reviewOpenEvent.create({
-      data: {
-        asin: data.asin,
-        productName: data.productName ?? null,
-        campaignId: data.campaignId ?? null,
-        userAgent: ua,
-        ipHash,
-      },
-    });
-
     // 201 Created
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (err) {

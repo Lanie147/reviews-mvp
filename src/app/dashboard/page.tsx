@@ -5,8 +5,9 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import CampaignCard from "@/components/dashboard/CampaignCard";
-
 import QRCode from "react-qr-code";
+import ProductsTab from "@/app/dashboard/ProductsTab";
+
 import { headers } from "next/headers";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
@@ -35,7 +36,7 @@ function k(n: number) {
 export default async function Dashboard() {
   const [campaigns, reviewClicks, totalScans] = await Promise.all([
     prisma.campaign.findMany({
-      include: { marketplace: true },
+      include: { marketplace: true, products: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.reviewOpenEvent.count(),
@@ -184,6 +185,7 @@ export default async function Dashboard() {
                   </Button>
                 </CardContent>
               </Card>
+              
             )}
 
             {/* Active campaigns */}
@@ -191,32 +193,26 @@ export default async function Dashboard() {
               <>
                 <h3 className="mt-4 text-lg font-semibold">Active campaigns</h3>
                 <div className="mt-3 grid grid-cols-1 gap-6 md:grid-cols-2">
-                  {active.map((c) => (
+                {active.map((c) => (
+                  <div key={c.id} className="mb-6">
                     <CampaignCard
-                      key={c.id}
                       id={c.id}
                       name={c.name}
                       productName={c.productName}
                       asin={c.asin ?? undefined}
                       imageUrl={c.imageUrl ?? undefined}
                       slug={c.slug!}
-                      marketplaceLabel={`${c.marketplace?.platform ?? "—"} ${
-                        c.marketplace?.code ?? ""
-                      }`}
+                      marketplaceLabel={`${c.marketplace?.platform ?? "—"} ${c.marketplace?.code ?? ""}`}
                       status={c.status as "ACTIVE" | "ARCHIVED"}
                       actions={
                         <form action={archiveCampaign}>
                           <input type="hidden" name="id" value={c.id} />
-                          <Button
-                            className="cursor-pointer"
-                            variant="destructive"
-                            type="submit"
-                          >
-                            Archive
-                          </Button>
+                          <Button className="cursor-pointer" variant="destructive" type="submit">Archive</Button>
                         </form>
                       }
                     />
+                      
+                    </div>
                   ))}
                 </div>
               </>

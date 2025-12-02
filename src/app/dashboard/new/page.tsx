@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import ProductSelector from "@/components/ProductSelector";
 
 export default function NewCampaignPage() {
   const [pending, startTransition] = useTransition();
@@ -128,6 +129,12 @@ export default function NewCampaignPage() {
                 </div>
               )}
             </div>
+
+            <section>
+              <h3 className="text-sm font-medium">Select products to add to this campaign</h3>
+              <p className="text-xs text-muted-foreground mb-2">Tick products to associate them with the new campaign.</p>
+              <ProductSelector name="productIds" filterUnassigned={true} />
+            </section>
 
             <div className="pt-2">
               <Button

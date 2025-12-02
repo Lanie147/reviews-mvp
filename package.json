@@ -10,9 +10,6 @@
     "lint:strict": "eslint . --max-warnings=0",
     "postinstall": "prisma generate"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@clerk/nextjs": "^6.31.9",
     "@hookform/resolvers": "^5.2.1",

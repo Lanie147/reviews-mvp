@@ -1,6 +1,7 @@
 "use server";
 // at top of file
-import { Platform } from "@prisma/client";
+import { platform } from "@prisma/client";
+import { randomUUID } from "crypto";
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -33,7 +34,7 @@ async function getDefaultMarketplaceId() {
     update: {}, // nothing to change on subsequent runs
     create: {
       id: DEFAULT_MARKETPLACE_ID,
-      platform: Platform.AMAZON, // <-- enum, not string
+      platform: platform.AMAZON, // <-- enum, not string
       code: "UK",
       tld: "co.uk",
       // externalId: "SELLER_ID_OPTIONAL", // if your schema has it
@@ -60,19 +61,30 @@ export async function createCampaign(formData: FormData) {
 
   const slug = await uniqueSlug(slugify(`${productName}-${asin}`));
   const marketplaceId = await getDefaultMarketplaceId();
+  const id = randomUUID(); // ensure id provided because Prisma schema requires it
 
   await prisma.campaign.create({
     data: {
+      id,
       name,
       productName,
-      asin: asin.toUpperCase(),
+      asin,
       imageUrl,
       slug,
-      status: "active", // if your schema has this with default, you can omit
-      marketplace: { connect: { id: marketplaceId } }, // <-- required relation satisfied
+      status: "active",
+      marketplace: { connect: { id: marketplaceId } },
     },
   });
 
+  // Attach selected products (form sends multiple productIds)
+  const productIds = formData.getAll("productIds").map(String).map((s) => s.trim()).filter(Boolean);
+  if (productIds.length > 0) {
+    await prisma.product.updateMany({
+      where: { id: { in: productIds } },
+      data: { campaignId: id },
+    });
+  }
+
   revalidatePath("/dashboard");
-  return { ok: true };
+  return { ok: true, campaignId: id };
 }
