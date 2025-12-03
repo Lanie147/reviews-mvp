@@ -29,7 +29,7 @@ export async function GET(
   const ipHash = crypto.createHash("sha256").update(String(ip)).digest("hex");
 
   await prisma.scanEvent.create({
-    data: { shortLinkId: short.id, userAgent: ua, ipHash },
+    data: { id: crypto.randomUUID(), shortLinkId: short.id, userAgent: ua, ipHash },
   });
 
   // Always redirect to the generic landing

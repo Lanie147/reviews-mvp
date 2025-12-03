@@ -63,6 +63,7 @@ export async function POST(req: Request) {
     // Save
     const created = await prisma.reviewSubmission.create({
       data: {
+        id: crypto.randomUUID(), // Generate a unique ID
         campaignId: data.campaignId,
         campaignName: data.campaignName,
         marketplace: data.marketplace, // JSON field
@@ -73,7 +74,6 @@ export async function POST(req: Request) {
         reviewText: data.reviewText,
         email: data.email || undefined,
         marketingOptIn: data.marketingOptIn,
-        targetSnapshot: data.selectedProduct ?? undefined,
       },
     });
     return NextResponse.json({ ok: true, id: created.id }, { status: 201 });

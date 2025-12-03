@@ -40,9 +40,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true, created: rows.length }, { status: 201 });
-  } catch (err: any) {
-    if (err?.name === "ZodError") {
-      return NextResponse.json({ ok: false, error: err.errors }, { status: 400 });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "ZodError") {
+      return NextResponse.json({ ok: false, error: (err as z.ZodError).issues }, { status: 400 });
     }
     console.error("create products error:", err);
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });

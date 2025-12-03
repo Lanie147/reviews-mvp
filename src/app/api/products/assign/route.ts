@@ -16,10 +16,10 @@ export async function POST(req: Request) {
       data: { campaignId: data.campaignId ?? null },
     });
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("assign products error", err);
-    if (err?.name === "ZodError") {
-      return NextResponse.json({ ok: false, error: err.errors }, { status: 400 });
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ ok: false, error: err.issues }, { status: 400 });
     }
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }

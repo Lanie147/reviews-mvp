@@ -56,11 +56,12 @@ export default function ProductsTab() {
       setTitle("");
       setMarketplaceId("");
       await load();
-    } catch (err: any) {
-      setError(String(err?.message ?? err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
   }
 
   return (

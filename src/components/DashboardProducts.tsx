@@ -74,12 +74,13 @@ export default function DashboardProducts({
       // clear selection
       setSelected({});
       setSelectAll(false);
-    } catch (err: any) {
-      setError(String(err?.message ?? err));
-    } finally {
-      setLoading(false);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
     }
-  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -110,12 +111,13 @@ export default function DashboardProducts({
       setProducts((p) => [...added, ...p]);
       setExternalIds("");
       setTitle("");
-    } catch (err: any) {
-      setError(String(err?.message ?? err));
-    } finally {
-      setLoading(false);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
     }
-  }
 
   return (
     <section className="space-y-4">
