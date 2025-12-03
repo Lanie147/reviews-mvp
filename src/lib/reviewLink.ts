@@ -1,4 +1,4 @@
-import type { Platform } from "@prisma/client";
+import type { platform as Platform } from "@prisma/client";
 
 type BuildArgs = {
   platform: Platform;
