@@ -36,12 +36,10 @@ export async function POST(req: Request) {
     }
 
     // Block duplicates per (campaignId, orderNumber)
-    const existing = await prisma.reviewSubmission.findUnique({
+    const existing = await prisma.reviewSubmission.findFirst({
       where: {
-        campaignId_orderNumber: {
-          campaignId: data.campaignId,
-          orderNumber: data.orderNumber,
-        },
+        campaignId: data.campaignId,
+        orderNumber: data.orderNumber,
       },
       select: { id: true },
     });
@@ -56,7 +54,7 @@ export async function POST(req: Request) {
             },
           ],
         },
-        { status: 409 }
+        { status: 400 }
       );
     }
 
