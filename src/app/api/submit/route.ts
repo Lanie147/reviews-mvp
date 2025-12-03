@@ -1,5 +1,6 @@
 // src/app/api/submit/route.ts
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
@@ -94,6 +95,7 @@ export async function POST(req: Request) {
     // 4) Create the submission (now safe to connect)
     const submission = await prisma.reviewSubmission.create({
       data: {
+        id: randomUUID(),
         campaign: { connect: { id: campaign.id } },
         campaignName: campaign.name, // keep your snapshot, or use campaign.name
         marketplace: marketplaceJson,
